@@ -1,4 +1,5 @@
 import { defineBackend } from "@aws-amplify/backend";
+import { Aws } from "aws-cdk-lib";
 import { PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { auth } from "./auth/resource";
 import { postConfirmation } from "./auth/post-confirmation/resource";
@@ -51,12 +52,23 @@ backend.manageUsers.resources.lambda.addToRolePolicy(
   })
 );
 
-// --- post-confirmation Lambda: IAM (event already provides userPoolId) -----
+// --- post-confirmation Lambda: IAM ------------------------------------------
+//
+// IMPORTANT: don't reference `userPoolArn` here. The post-confirmation Lambda
+// lives in the same nested stack as the user pool (because it's an auth
+// trigger), and the user pool already references the Lambda. Pointing the
+// Lambda's IAM policy back at the specific pool ARN creates an intra-stack
+// circular dependency that CloudFormation refuses.
+//
+// Using CloudFormation pseudo-parameters builds the same effective ARN at
+// runtime without recording a CDK dependency edge. Scoped to user pools in
+// THIS account/region, which is the strictest you can be without the cycle.
+const userPoolWildcardArn = `arn:${Aws.PARTITION}:cognito-idp:${Aws.REGION}:${Aws.ACCOUNT_ID}:userpool/*`;
 
 backend.postConfirmation.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ["cognito-idp:AdminAddUserToGroup"],
-    resources: [userPoolArn],
+    resources: [userPoolWildcardArn],
   })
 );
