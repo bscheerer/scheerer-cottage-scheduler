@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Base ---------- */
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply font-sans text-ink bg-offwhite antialiased;
+  background:
+    radial-gradient(ellipse at top, rgba(169,214,229,.35), transparent 60%),
+    linear-gradient(180deg, #FBFAF6 0%, #FAF3E3 100%);
+  min-height: 100vh;
+}
+
+/* ---------- Amplify Authenticator theme overrides ---------- */
+/* The Authenticator UI ships with a default purple/blue. We override with our
+   water/beach palette so the sign-in screen feels on-brand. */
+[data-amplify-authenticator] {
+  --amplify-colors-brand-primary-10:  #E8F4F8;
+  --amplify-colors-brand-primary-20:  #A9D6E5;
+  --amplify-colors-brand-primary-40:  #61A5C2;
+  --amplify-colors-brand-primary-60:  #2C7DA0;
+  --amplify-colors-brand-primary-80:  #1B4965;
+  --amplify-colors-brand-primary-90:  #163A52;
+  --amplify-colors-brand-primary-100: #112E41;
+  --amplify-components-button-primary-background-color: #2C7DA0;
+  --amplify-components-button-primary-hover-background-color: #1B4965;
+  --amplify-components-tabs-item-active-color: #1B4965;
+  --amplify-components-tabs-item-focus-color: #2C7DA0;
+  --amplify-components-tabs-item-active-border-color: #F7B267;
+}
