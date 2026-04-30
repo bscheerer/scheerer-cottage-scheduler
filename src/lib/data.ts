@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { client } from "./client";
+import { writeAudit } from "./audit";
 import type { Schema } from "../../amplify/data/resource";
 
 export type Reservation = Schema["Reservation"]["type"];
@@ -70,24 +71,45 @@ export async function createRequest(input: NewRequestInput) {
 }
 
 /** Cancel an own pending request. */
-export async function cancelRequest(requestId: string) {
+export async function cancelRequest(requestId: string, actorId: string, actorLabel?: string) {
   const { errors } = await client.models.Request.update({
     id: requestId,
     status: "Cancelled",
   });
   if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+  await writeAudit({
+    actorId,
+    actorLabel,
+    action: "CancelRequest",
+    targetType: "Request",
+    targetId: requestId,
+    summary: "Cancelled own pending request",
+  });
 }
 
 /** Deny a request with optional reason. Admin/SuperUser only (enforced by @auth). */
-export async function denyRequest(requestId: string, decidedById: string, reason?: string) {
+export async function denyRequest(
+  request: Request,
+  decidedById: string,
+  decidedByLabel?: string,
+  reason?: string
+) {
   const { errors } = await client.models.Request.update({
-    id: requestId,
+    id: request.id,
     status: "Denied",
     decidedById,
     decidedAt: new Date().toISOString(),
     decisionReason: reason ?? null,
   });
   if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+  await writeAudit({
+    actorId:    decidedById,
+    actorLabel: decidedByLabel,
+    action:     "DenyRequest",
+    targetType: "Request",
+    targetId:   request.id,
+    summary:    `Denied ${request.partyName ?? "request"} for ${request.startDate} → ${request.endDate}${reason ? ` (${reason})` : ""}`,
+  });
 }
 
 /** True if [aStart,aEnd] overlaps [bStart,bEnd] inclusively (ISO date strings). */
@@ -115,7 +137,8 @@ export interface ApproveResult {
  */
 export async function approveRequest(
   request: Request,
-  decidedById: string
+  decidedById: string,
+  decidedByLabel?: string
 ): Promise<ApproveResult> {
   if (!request.startDate || !request.endDate) {
     throw new Error("Request is missing startDate or endDate.");
@@ -184,6 +207,18 @@ export async function approveRequest(
       console.warn("Auto-deny failed for request", pending.id, err);
     }
   }
+
+  // Audit trail
+  await writeAudit({
+    actorId:    decidedById,
+    actorLabel: decidedByLabel,
+    action:     "ApproveRequest",
+    targetType: "Request",
+    targetId:   request.id,
+    summary:
+      `Approved ${request.partyName ?? "request"} for ${request.startDate} → ${request.endDate}` +
+      (autoDeniedIds.length ? ` · auto-denied ${autoDeniedIds.length} overlap(s)` : ""),
+  });
 
   return { reservationId: reservation.id, autoDeniedRequestIds: autoDeniedIds };
 }

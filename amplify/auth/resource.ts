@@ -1,4 +1,5 @@
 import { defineAuth } from "@aws-amplify/backend";
+import { postConfirmation } from "./post-confirmation/resource";
 
 /**
  * Cognito user pool for the Scheerer Cottage Scheduler.
@@ -8,12 +9,9 @@ import { defineAuth } from "@aws-amplify/backend";
  *   - Admin      : Approves/denies requests, edits reservations.
  *   - Viewer     : Sees the calendar, submits date requests.
  *
- * After the first deploy you will need to:
- *   1. Sign up your own account from the app's sign-in page.
- *   2. Open the AWS Cognito console, find this user pool, find your user,
- *      and add it to the "SuperUser" group. (One-time bootstrap.)
- *   3. From then on, you can promote/demote others from the Users & Roles
- *      page in the app.
+ * Phase 4 wires up a post-confirmation trigger that auto-adds new sign-ups
+ * to the Viewer group, so the only manual step ever needed is the very
+ * first promotion to SuperUser (done once, via Cognito console).
  */
 export const auth = defineAuth({
   loginWith: {
@@ -25,8 +23,7 @@ export const auth = defineAuth({
     profilePicture: { required: false, mutable: true },
   },
   groups: ["SuperUser", "Admin", "Viewer"],
-  // The default group new sign-ups land in. SuperUser must be added manually
-  // by an existing super user (or via the Cognito console for the very first one).
-  // Amplify Gen 2 does not auto-assign groups, so we add a post-confirmation
-  // trigger in a later phase. For now, viewers must be invited by the super user.
+  triggers: {
+    postConfirmation,
+  },
 });

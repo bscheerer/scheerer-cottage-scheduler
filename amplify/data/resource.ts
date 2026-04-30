@@ -1,4 +1,5 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
+import { manageUsers } from "../functions/manage-users/resource";
 
 /**
  * GraphQL data model for the Scheerer Cottage Scheduler.
@@ -9,6 +10,10 @@ import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
  *   - Request     : pending/approved/denied/cancelled requests for dates
  *   - Cottage     : metadata about the cottage (singleton row in v1)
  *   - AuditLog    : append-only history of admin actions
+ *
+ * Phase 4 also exposes Super-User-only custom operations backed by a
+ * Lambda that talks to Cognito admin APIs:
+ *   - listFamilyUsers, changeUserRole, inviteFamilyUser, removeFamilyUser
  *
  * Authorization rules implement the permissions matrix from section 3 of
  * the design plan. The defaults are deliberately generous for read (so the
@@ -109,9 +114,11 @@ const schema = a.schema({
   AuditLog: a
     .model({
       actorId: a.id().required(),
+      actorLabel: a.string(),
       action: a.string().required(),     // e.g. "ApproveRequest", "ChangeRole"
       targetType: a.string(),             // e.g. "Request", "User"
       targetId: a.id(),
+      summary: a.string(),                // short human-readable description
       before: a.json(),
       after: a.json(),
       timestamp: a.datetime().required(),
@@ -121,6 +128,54 @@ const schema = a.schema({
       allow.groups(["Admin", "SuperUser"]).to(["read", "create"]),
       // Append-only — no updates or deletes, ever.
     ]),
+
+  // -------------------------------------------------------- FamilyUser
+  // Lightweight DTO returned by listFamilyUsers (the data lives in Cognito,
+  // not in our DB).
+  FamilyUser: a.customType({
+    username:    a.string(),
+    email:       a.string(),
+    displayName: a.string(),
+    role:        a.string(),
+    status:      a.string(),
+    createdAt:   a.string(),
+    enabled:     a.boolean(),
+  }),
+
+  // ------------------------------------------- Custom Lambda operations
+  listFamilyUsers: a
+    .query()
+    .returns(a.ref("FamilyUser").array())
+    .authorization((allow) => [allow.groups(["Admin", "SuperUser"])])
+    .handler(a.handler.function(manageUsers)),
+
+  changeUserRole: a
+    .mutation()
+    .arguments({
+      username: a.string().required(),
+      newRole:  a.string().required(),
+    })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.group("SuperUser")])
+    .handler(a.handler.function(manageUsers)),
+
+  inviteFamilyUser: a
+    .mutation()
+    .arguments({
+      email:       a.string().required(),
+      displayName: a.string().required(),
+      role:        a.string().required(),
+    })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.group("SuperUser")])
+    .handler(a.handler.function(manageUsers)),
+
+  removeFamilyUser: a
+    .mutation()
+    .arguments({ username: a.string().required() })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.group("SuperUser")])
+    .handler(a.handler.function(manageUsers)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

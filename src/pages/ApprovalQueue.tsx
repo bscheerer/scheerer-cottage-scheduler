@@ -15,7 +15,7 @@ const STATUS_BADGE: Record<string, string> = {
  * a client-side conflict check and auto-denies overlapping pendings.
  */
 export default function ApprovalQueue() {
-  const { userId } = useIdentity();
+  const { userId, label } = useIdentity();
   const { items: requests, loading } = useRequests();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function ApprovalQueue() {
     setError(null);
     setToast(null);
     try {
-      const result = await approveRequest(req, userId);
+      const result = await approveRequest(req, userId, label ?? undefined);
       const denied = result.autoDeniedRequestIds.length;
       setToast(
         denied > 0
@@ -58,7 +58,7 @@ export default function ApprovalQueue() {
     setError(null);
     setToast(null);
     try {
-      await denyRequest(req.id, userId, reason || undefined);
+      await denyRequest(req, userId, label ?? undefined, reason || undefined);
       setToast("Denied.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Deny failed.");

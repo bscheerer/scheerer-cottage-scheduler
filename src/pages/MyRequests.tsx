@@ -28,11 +28,12 @@ export default function MyRequests() {
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
   async function onCancel(req: Request) {
+    if (!userId) return;
     if (!confirm(`Cancel your request for ${req.startDate} → ${req.endDate}?`)) return;
     setBusyId(req.id);
     setError(null);
     try {
-      await cancelRequest(req.id);
+      await cancelRequest(req.id, userId, label ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not cancel.");
     } finally {
