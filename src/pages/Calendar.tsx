@@ -4,6 +4,7 @@ import { useReservations, useRequests } from "../lib/data";
 import CalendarToolbar, { type ViewMode } from "../components/calendar/CalendarToolbar";
 import MonthView from "../components/calendar/MonthView";
 import WeekView from "../components/calendar/WeekView";
+import RequestModal from "../components/RequestModal";
 
 /**
  * Default landing page once signed in. Composes the calendar toolbar with
@@ -17,6 +18,7 @@ import WeekView from "../components/calendar/WeekView";
 export default function Calendar() {
   const [cursor, setCursor] = useState(() => new Date());
   const [view, setView]     = useState<ViewMode>("month");
+  const [modalOpen, setModalOpen] = useState(false);
 
   const { items: reservations, loading: loadingReservations } = useReservations();
   const { items: requests,     loading: loadingRequests }     = useRequests();
@@ -36,14 +38,7 @@ export default function Calendar() {
         onNext ={() => step(1)}
         onToday={() => setCursor(new Date())}
         onView ={setView}
-        onRequest={() => {
-          // Phase 3 will replace this with the real request modal.
-          alert(
-            "Requesting dates lands in Phase 3.\n\n" +
-            "For now, an admin can create a reservation directly via the AWS DynamoDB console " +
-            "(table 'Reservation-...') to verify the calendar renders it."
-          );
-        }}
+        onRequest={() => setModalOpen(true)}
       />
 
       {loading ? (
@@ -60,11 +55,17 @@ export default function Calendar() {
       {!loading && reservations.length === 0 && requests.length === 0 && (
         <div className="px-5 pb-5 -mt-2">
           <div className="rounded-xl border border-aqua/30 bg-foam px-4 py-3 text-sm text-deep">
-            <strong>The calendar is empty.</strong> No reservations or pending requests yet.
-            Once Phase 3 is built, family members will be able to request dates from this screen.
+            <strong>The calendar is empty.</strong> Click <em>Request dates</em> to submit
+            the first stay — admins will review and approve from the queue.
           </div>
         </div>
       )}
+
+      <RequestModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        reservations={reservations}
+      />
     </section>
   );
 }
