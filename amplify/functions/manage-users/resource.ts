@@ -12,4 +12,7 @@ export const manageUsers = defineFunction({
   name: "manage-users",
   entry: "./handler.ts",
   timeoutSeconds: 20,
+  // Sit in the data nested stack — this Lambda backs custom GraphQL ops, so
+  // grouping it with data avoids a circular dependency on first deploy.
+  resourceGroupName: "data",
 });

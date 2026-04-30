@@ -15,4 +15,7 @@ export const postConfirmation = defineFunction({
   name: "post-confirmation",
   entry: "./handler.ts",
   timeoutSeconds: 10,
+  // Sit in the auth nested stack to avoid a circular dependency between
+  // auth ↔ function ↔ data on first deploy.
+  resourceGroupName: "auth",
 });
