@@ -17,12 +17,6 @@ const USER_POOL_ID = process.env.USER_POOL_ID!;
 const ROLE_GROUPS = ["SuperUser", "Admin", "Viewer"] as const;
 type Role = (typeof ROLE_GROUPS)[number];
 
-interface AppSyncEvent<T = Record<string, unknown>> {
-  arguments: T;
-  identity?: { sub?: string; username?: string };
-  info: { fieldName: string };
-}
-
 export interface FamilyUser {
   username: string;
   email: string;
@@ -33,24 +27,56 @@ export interface FamilyUser {
   enabled: boolean;
 }
 
-export const handler = async (event: AppSyncEvent) => {
-  const op = event.info.fieldName;
+interface ChangeRoleArgs  { username: string; newRole: Role }
+interface InviteArgs      { email: string; displayName: string; role: Role }
+interface RemoveArgs      { username: string }
+
+/**
+ * Single-Lambda dispatcher for four GraphQL operations:
+ *   - listFamilyUsers (no arguments)
+ *   - changeUserRole  ({ username, newRole })
+ *   - inviteFamilyUser({ email, displayName, role })
+ *   - removeFamilyUser({ username })
+ *
+ * Amplify Gen 2's `a.handler.function()` invocation shape doesn't expose
+ * `info.fieldName`, so we route by inspecting which arguments are present.
+ * Each operation's argument schema is distinct enough to disambiguate.
+ *
+ * The full event is logged at the start so any future routing surprises
+ * are obvious from CloudWatch.
+ */
+export const handler = async (event: unknown): Promise<unknown> => {
+  console.log("manage-users :: event ::", JSON.stringify(event));
+
+  // Defensive arg extraction — Amplify Gen 2 may wrap or unwrap the args
+  // depending on how the resolver is configured. Try both.
+  const e = event as Record<string, unknown>;
+  const args = (e?.arguments ?? e ?? {}) as Record<string, unknown>;
+  const fieldNameHint =
+    ((e?.info as Record<string, unknown> | undefined)?.fieldName as string | undefined) ??
+    ((e?.fieldName as string | undefined) ?? undefined);
+
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(args, k);
 
   try {
-    switch (op) {
-      case "listFamilyUsers":
-        return await listFamilyUsers();
-      case "changeUserRole":
-        return await changeUserRole(event.arguments as { username: string; newRole: Role });
-      case "inviteFamilyUser":
-        return await inviteFamilyUser(event.arguments as { email: string; displayName: string; role: Role });
-      case "removeFamilyUser":
-        return await removeFamilyUser(event.arguments as { username: string });
-      default:
-        throw new Error(`Unknown operation: ${op}`);
+    // Prefer fieldName when available (forward-compatible if Amplify changes shape)
+    if (fieldNameHint) {
+      switch (fieldNameHint) {
+        case "listFamilyUsers":  return await listFamilyUsers();
+        case "changeUserRole":   return await changeUserRole(args as unknown as ChangeRoleArgs);
+        case "inviteFamilyUser": return await inviteFamilyUser(args as unknown as InviteArgs);
+        case "removeFamilyUser": return await removeFamilyUser(args as unknown as RemoveArgs);
+      }
     }
+
+    // Argument-shape dispatch (current Amplify Gen 2 behaviour)
+    if (has("newRole"))                                    return await changeUserRole(args as unknown as ChangeRoleArgs);
+    if (has("email") && has("displayName") && has("role")) return await inviteFamilyUser(args as unknown as InviteArgs);
+    if (has("username"))                                   return await removeFamilyUser(args as unknown as RemoveArgs);
+    // No identifying argument → it's the list query.
+    return await listFamilyUsers();
   } catch (err) {
-    console.error(`manage-users :: ${op} failed`, err);
+    console.error("manage-users :: failed", err);
     throw err;
   }
 };
@@ -76,11 +102,10 @@ async function listFamilyUsers(): Promise<FamilyUser[]> {
   return out.sort((a, b) => a.email.localeCompare(b.email));
 }
 
-async function changeUserRole(args: { username: string; newRole: Role }): Promise<boolean> {
+async function changeUserRole(args: ChangeRoleArgs): Promise<boolean> {
   if (!ROLE_GROUPS.includes(args.newRole)) {
     throw new Error(`Invalid role: ${args.newRole}`);
   }
-  // Remove from every other role group, add to the target. Idempotent.
   for (const g of ROLE_GROUPS) {
     if (g === args.newRole) continue;
     try {
@@ -90,9 +115,7 @@ async function changeUserRole(args: { username: string; newRole: Role }): Promis
         GroupName: g,
       }));
     } catch (err: unknown) {
-      // Ignore "user wasn't in this group" — it's the no-op case.
       if (!(err instanceof Error && err.name === "InvalidParameterException")) {
-        // Soft-log other errors so we don't fail the whole op for a stray group.
         console.warn(`Could not remove from ${g}:`, err);
       }
     }
@@ -105,11 +128,10 @@ async function changeUserRole(args: { username: string; newRole: Role }): Promis
   return true;
 }
 
-async function inviteFamilyUser(args: { email: string; displayName: string; role: Role }): Promise<boolean> {
+async function inviteFamilyUser(args: InviteArgs): Promise<boolean> {
   if (!ROLE_GROUPS.includes(args.role)) {
     throw new Error(`Invalid role: ${args.role}`);
   }
-  // Cognito's AdminCreateUser auto-emails a one-time password to the address.
   await cognito.send(new AdminCreateUserCommand({
     UserPoolId: USER_POOL_ID,
     Username: args.email,
@@ -128,8 +150,7 @@ async function inviteFamilyUser(args: { email: string; displayName: string; role
   return true;
 }
 
-async function removeFamilyUser(args: { username: string }): Promise<boolean> {
-  // Disable rather than delete — preserves audit history and lets us re-enable.
+async function removeFamilyUser(args: RemoveArgs): Promise<boolean> {
   await cognito.send(new AdminDisableUserCommand({
     UserPoolId: USER_POOL_ID,
     Username: args.username,
@@ -137,7 +158,7 @@ async function removeFamilyUser(args: { username: string }): Promise<boolean> {
   return true;
 }
 
-// Re-enable helper — surfaced via a future query if needed.
+// Helper retained for a future re-enable button.
 export async function reenableFamilyUser(username: string): Promise<boolean> {
   await cognito.send(new AdminEnableUserCommand({
     UserPoolId: USER_POOL_ID,
@@ -155,7 +176,6 @@ async function toFamilyUser(u: UserType): Promise<FamilyUser> {
   const attrs    = attrsToMap(u.Attributes);
   const groups   = await listGroupsFor(username);
 
-  // Prefer the strongest group as the "role"
   const role: Role | null =
     groups.includes("SuperUser") ? "SuperUser" :
     groups.includes("Admin")     ? "Admin" :
