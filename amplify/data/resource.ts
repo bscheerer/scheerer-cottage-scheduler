@@ -80,10 +80,10 @@ const schema = a.schema({
     ])
     .authorization((allow) => [
       // Everyone signed in can read all requests (so admins see the queue
-      // and viewers see their own pending requests on the calendar).
-      allow.authenticated().to(["read"]),
-      // Anyone signed in can create their own request.
-      allow.authenticated().to(["create"]),
+      // and viewers see their own pending requests on the calendar) and
+      // submit new ones. (AppSync allows one rule per provider per model,
+      // so read + create are combined here.)
+      allow.authenticated().to(["read", "create"]),
       // Owner can cancel their pending request.
       allow.owner().to(["update", "delete"]),
       // Admins / Super User can approve, deny, edit, or delete any request.
