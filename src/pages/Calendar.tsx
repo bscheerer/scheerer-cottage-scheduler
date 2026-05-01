@@ -1,24 +1,35 @@
 import { useState } from "react";
 import { addMonths, addWeeks } from "../lib/dates";
-import { useReservations, useRequests } from "../lib/data";
+import { useReservations, useRequests, type Reservation } from "../lib/data";
+import { useCurrentRole } from "../lib/auth";
 import CalendarToolbar, { type ViewMode } from "../components/calendar/CalendarToolbar";
 import MonthView from "../components/calendar/MonthView";
 import WeekView from "../components/calendar/WeekView";
 import RequestModal from "../components/RequestModal";
+import ReservationModal from "../components/ReservationModal";
 
 /**
  * Default landing page once signed in. Composes the calendar toolbar with
- * either the monthly or weekly view, both reading live data from AppSync
- * via observeQuery (any other browser approving a request shows up here
- * within a couple seconds).
+ * either the monthly or weekly view, both reading live data from AppSync.
  *
- * The "Request dates" button is wired to a placeholder for now; the actual
- * request modal arrives in Phase 3.
+ * Click handling:
+ *   - "+ Request dates" in the toolbar opens RequestModal for a fresh request.
+ *   - Clicking a reserved cell opens ReservationModal — admins can edit or
+ *     cancel; the original requester can submit a "request a change" which
+ *     re-opens RequestModal pre-filled with the existing dates and a note.
  */
 export default function Calendar() {
+  const role = useCurrentRole();
+
   const [cursor, setCursor] = useState(() => new Date());
   const [view, setView]     = useState<ViewMode>("month");
-  const [modalOpen, setModalOpen] = useState(false);
+
+  // Modal state — only one open at a time.
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [requestPrefill, setRequestPrefill]     = useState<{
+    start?: string; end?: string; partyName?: string; note?: string; title?: string;
+  } | null>(null);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
 
   const { items: reservations, loading: loadingReservations } = useReservations();
   const { items: requests,     loading: loadingRequests }     = useRequests();
@@ -27,6 +38,30 @@ export default function Calendar() {
 
   function step(direction: -1 | 1) {
     setCursor((c) => (view === "month" ? addMonths(c, direction) : addWeeks(c, direction)));
+  }
+
+  function openFreshRequestModal() {
+    setRequestPrefill(null);
+    setRequestModalOpen(true);
+  }
+
+  /**
+   * Owner clicked "Request a change" inside ReservationModal. Close the
+   * details modal and open RequestModal pre-filled with the reservation's
+   * dates plus a note explaining what's being modified. Admin sees the new
+   * request in the queue; if approved, admin should manually cancel the old
+   * reservation (a future polish would automate this).
+   */
+  function openModificationRequest(r: Reservation) {
+    setSelectedReservation(null);
+    setRequestPrefill({
+      start: r.startDate ?? undefined,
+      end:   r.endDate ?? undefined,
+      partyName: r.partyName ?? undefined,
+      note:  `Modification of my approved stay (${r.startDate} → ${r.endDate}). Please change to: `,
+      title: "Request a change",
+    });
+    setRequestModalOpen(true);
   }
 
   return (
@@ -38,7 +73,7 @@ export default function Calendar() {
         onNext ={() => step(1)}
         onToday={() => setCursor(new Date())}
         onView ={setView}
-        onRequest={() => setModalOpen(true)}
+        onRequest={openFreshRequestModal}
       />
 
       {loading ? (
@@ -47,9 +82,19 @@ export default function Calendar() {
           <div>Loading the calendar…</div>
         </div>
       ) : view === "month" ? (
-        <MonthView cursor={cursor} reservations={reservations} requests={requests} />
+        <MonthView
+          cursor={cursor}
+          reservations={reservations}
+          requests={requests}
+          onReservationClick={setSelectedReservation}
+        />
       ) : (
-        <WeekView  cursor={cursor} reservations={reservations} requests={requests} />
+        <WeekView
+          cursor={cursor}
+          reservations={reservations}
+          requests={requests}
+          onReservationClick={setSelectedReservation}
+        />
       )}
 
       {!loading && reservations.length === 0 && requests.length === 0 && (
@@ -62,9 +107,23 @@ export default function Calendar() {
       )}
 
       <RequestModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        open={requestModalOpen}
+        onClose={() => { setRequestModalOpen(false); setRequestPrefill(null); }}
         reservations={reservations}
+        initialStart={requestPrefill?.start}
+        initialEnd={requestPrefill?.end}
+        initialPartyName={requestPrefill?.partyName}
+        initialNote={requestPrefill?.note}
+        title={requestPrefill?.title}
+      />
+
+      <ReservationModal
+        reservation={selectedReservation}
+        open={!!selectedReservation}
+        onClose={() => setSelectedReservation(null)}
+        requests={requests}
+        role={role}
+        onRequestChange={openModificationRequest}
       />
     </section>
   );

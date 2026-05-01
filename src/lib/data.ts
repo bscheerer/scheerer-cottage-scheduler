@@ -74,6 +74,89 @@ export async function createRequest(input: NewRequestInput) {
   return data;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Reservation mutations (admin/super only — UI hides actions for viewers)    */
+/* -------------------------------------------------------------------------- */
+
+export interface ReservationPatch {
+  startDate?: string;
+  endDate?: string;
+  partyName?: string;
+  notes?: string | null;
+}
+
+/**
+ * Admin edit of an existing reservation. Re-runs the conflict check against
+ * other reservations (excluding the one being edited) so a date change can't
+ * collide with something already approved.
+ */
+export async function updateReservation(
+  reservation: Reservation,
+  patch: ReservationPatch,
+  actorId: string,
+  actorLabel?: string
+): Promise<void> {
+  const newStart = patch.startDate ?? reservation.startDate ?? "";
+  const newEnd   = patch.endDate   ?? reservation.endDate   ?? "";
+
+  if (newStart && newEnd) {
+    const { data: all } = await client.models.Reservation.list();
+    const conflict = (all ?? []).find(
+      (r) => r.id !== reservation.id &&
+             r.startDate && r.endDate &&
+             overlaps(newStart, newEnd, r.startDate, r.endDate)
+    );
+    if (conflict) {
+      throw new Error(
+        `Dates conflict with ${conflict.partyName ?? "another reservation"} ` +
+        `(${conflict.startDate} → ${conflict.endDate}).`
+      );
+    }
+  }
+
+  const { errors } = await client.models.Reservation.update({
+    id: reservation.id,
+    ...(patch.startDate !== undefined && { startDate: patch.startDate }),
+    ...(patch.endDate   !== undefined && { endDate:   patch.endDate }),
+    ...(patch.partyName !== undefined && { partyName: patch.partyName }),
+    ...(patch.notes     !== undefined && { notes:     patch.notes }),
+  });
+  if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+
+  await writeAudit({
+    actorId, actorLabel,
+    action: "UpdateReservation",
+    targetType: "Reservation",
+    targetId: reservation.id,
+    summary: `Edited ${reservation.partyName ?? "reservation"} ` +
+             `(${reservation.startDate} → ${reservation.endDate} ⇒ ${newStart} → ${newEnd})`,
+    before: { startDate: reservation.startDate, endDate: reservation.endDate, partyName: reservation.partyName },
+    after:  { startDate: newStart, endDate: newEnd, partyName: patch.partyName ?? reservation.partyName },
+  });
+}
+
+/** Delete (cancel) a reservation. Admin/super only. */
+export async function deleteReservation(
+  reservation: Reservation,
+  actorId: string,
+  actorLabel?: string
+): Promise<void> {
+  const { errors } = await client.models.Reservation.delete({ id: reservation.id });
+  if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+
+  await writeAudit({
+    actorId, actorLabel,
+    action: "CancelReservation",
+    targetType: "Reservation",
+    targetId: reservation.id,
+    summary: `Cancelled ${reservation.partyName ?? "reservation"} for ${reservation.startDate} → ${reservation.endDate}`,
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Request mutations                                                          */
+/* -------------------------------------------------------------------------- */
+
 /** Cancel an own pending request. */
 export async function cancelRequest(requestId: string, actorId: string, actorLabel?: string) {
   const { errors } = await client.models.Request.update({

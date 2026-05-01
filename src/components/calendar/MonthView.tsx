@@ -5,6 +5,8 @@ interface Props {
   cursor: Date;
   reservations: Reservation[];
   requests: Request[];
+  /** Fires when any reserved cell is clicked. Calendar opens the details modal. */
+  onReservationClick?: (r: Reservation) => void;
 }
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -16,7 +18,7 @@ const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
  * fill in warm sunset amber. Multi-day stays render the name + emoji on the
  * start day only and just-color the rest of the span — quick to scan.
  */
-export default function MonthView({ cursor, reservations, requests }: Props) {
+export default function MonthView({ cursor, reservations, requests, onReservationClick }: Props) {
   const days = monthGridDays(cursor);
 
   return (
@@ -67,13 +69,25 @@ export default function MonthView({ cursor, reservations, requests }: Props) {
             cellBg = "bg-sand-light text-muted border-sand-deep/30";
           }
 
+          const clickable = !!reservation && !!onReservationClick;
+          const Tag = clickable ? "button" : "div";
+          const interactiveProps = clickable
+            ? {
+                type: "button" as const,
+                onClick: () => onReservationClick(reservation!),
+                "aria-label": `Open ${reservation!.partyName} reservation details`,
+              }
+            : {};
+
           return (
-            <div
+            <Tag
               key={day.toISOString()}
+              {...interactiveProps}
               className={[
-                "rounded-xl border px-2 pt-1 pb-1 overflow-hidden flex flex-col transition",
+                "rounded-xl border px-2 pt-1 pb-1 overflow-hidden flex flex-col transition text-left w-full",
                 cellBg,
                 today ? "ring-2 ring-aqua ring-offset-1 ring-offset-white" : "",
+                clickable ? "cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua" : "",
               ].join(" ")}
             >
               {/* Top row: day number + today pill */}
@@ -105,7 +119,7 @@ export default function MonthView({ cursor, reservations, requests }: Props) {
                   />
                 )}
               </div>
-            </div>
+            </Tag>
           );
         })}
       </div>

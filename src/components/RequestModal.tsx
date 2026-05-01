@@ -6,9 +6,14 @@ import { toISODate } from "../lib/dates";
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Optional pre-fill (e.g. when user clicks a specific day in the calendar). */
+  /** Optional pre-fills (e.g. when user clicks a specific day in the calendar
+   *  or asks for a modification of an existing reservation). */
   initialStart?: string;
   initialEnd?: string;
+  initialPartyName?: string;
+  initialNote?: string;
+  /** Optional override for the modal title (e.g. "Request a change"). */
+  title?: string;
   /** Live list of approved reservations — used to warn about conflicts before submit. */
   reservations: Reservation[];
   onSuccess?: () => void;
@@ -21,15 +26,16 @@ interface Props {
  * it on the reservation chip later.
  */
 export default function RequestModal({
-  open, onClose, initialStart, initialEnd, reservations, onSuccess,
+  open, onClose, initialStart, initialEnd, initialPartyName, initialNote,
+  title, reservations, onSuccess,
 }: Props) {
   const today = toISODate(new Date());
   const { userId, label, picture, loading: identityLoading } = useIdentity();
 
   const [startDate, setStartDate] = useState(initialStart ?? today);
   const [endDate, setEndDate]     = useState(initialEnd ?? today);
-  const [partyName, setPartyName] = useState(label ?? "");
-  const [note, setNote]           = useState("");
+  const [partyName, setPartyName] = useState(initialPartyName ?? label ?? "");
+  const [note, setNote]           = useState(initialNote ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
@@ -41,11 +47,13 @@ export default function RequestModal({
     if (open) {
       setError(null);
       setSubmitting(false);
-      if (initialStart) setStartDate(initialStart);
-      if (initialEnd)   setEndDate(initialEnd);
+      if (initialStart)     setStartDate(initialStart);
+      if (initialEnd)       setEndDate(initialEnd);
+      if (initialPartyName) setPartyName(initialPartyName);
+      if (initialNote)      setNote(initialNote);
       setTimeout(() => firstInput.current?.focus(), 0);
     }
-  }, [open, initialStart, initialEnd]);
+  }, [open, initialStart, initialEnd, initialPartyName, initialNote]);
 
   useEffect(() => {
     if (!open) return;
@@ -100,7 +108,7 @@ export default function RequestModal({
         className="bg-white rounded-2xl shadow-lift border border-deep/10 w-full max-w-lg p-6 max-h-[90vh] overflow-auto"
       >
         <h3 id="request-modal-title" className="font-display text-2xl text-deep mb-1">
-          Request the cottage
+          {title ?? "Request the cottage"}
         </h3>
         <p className="text-sm text-muted mb-5">
           Pick the dates you want. The admin team will review and let you know.

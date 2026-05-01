@@ -5,6 +5,7 @@ interface Props {
   cursor: Date;
   reservations: Reservation[];
   requests: Request[];
+  onReservationClick?: (r: Reservation) => void;
 }
 
 /**
@@ -12,7 +13,7 @@ interface Props {
  * approved-teal color and show the party emoji + name; pending requests
  * use sunset amber.
  */
-export default function WeekView({ cursor, reservations, requests }: Props) {
+export default function WeekView({ cursor, reservations, requests, onReservationClick }: Props) {
   const days = weekDays(cursor);
 
   return (
@@ -44,13 +45,25 @@ export default function WeekView({ cursor, reservations, requests }: Props) {
             numColor = "text-driftwood";
           }
 
+          const clickable = !!reservation && !!onReservationClick;
+          const Tag = clickable ? "button" : "div";
+          const interactiveProps = clickable
+            ? {
+                type: "button" as const,
+                onClick: () => onReservationClick(reservation!),
+                "aria-label": `Open ${reservation!.partyName} reservation details`,
+              }
+            : {};
+
           return (
-            <div
+            <Tag
               key={day.toISOString()}
+              {...interactiveProps}
               className={[
-                "rounded-2xl border p-3 min-h-[260px] flex flex-col transition",
+                "rounded-2xl border p-3 min-h-[260px] flex flex-col transition text-left w-full",
                 bg,
                 today ? "ring-2 ring-aqua ring-offset-1 ring-offset-white" : "",
+                clickable ? "cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua" : "",
               ].join(" ")}
             >
               <div className={`text-center pb-2 mb-2 border-b ${reservation || pending ? "border-white/20" : "border-deep/5"}`}>
@@ -79,7 +92,7 @@ export default function WeekView({ cursor, reservations, requests }: Props) {
                   <span className="text-xs text-muted/70 italic">Open</span>
                 )}
               </div>
-            </div>
+            </Tag>
           );
         })}
       </div>
