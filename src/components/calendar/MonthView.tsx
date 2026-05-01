@@ -7,6 +7,8 @@ interface Props {
   requests: Request[];
   /** Fires when any reserved cell is clicked. Calendar opens the details modal. */
   onReservationClick?: (r: Reservation) => void;
+  /** Fires when an unreserved in-month day is clicked. Calendar opens RequestModal pre-filled with that date. */
+  onOpenDayClick?: (day: Date) => void;
 }
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -18,7 +20,9 @@ const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
  * fill in warm sunset amber. Multi-day stays render the name + emoji on the
  * start day only and just-color the rest of the span — quick to scan.
  */
-export default function MonthView({ cursor, reservations, requests, onReservationClick }: Props) {
+export default function MonthView({
+  cursor, reservations, requests, onReservationClick, onOpenDayClick,
+}: Props) {
   const days = monthGridDays(cursor);
 
   return (
@@ -69,13 +73,23 @@ export default function MonthView({ cursor, reservations, requests, onReservatio
             cellBg = "bg-sand-light text-muted border-sand-deep/30";
           }
 
-          const clickable = !!reservation && !!onReservationClick;
+          // What kind of click should this cell respond to?
+          const clickableForReservation = !!reservation && !!onReservationClick;
+          const clickableForOpenDay     = !reservation && !pending && inMonth && !!onOpenDayClick;
+          const clickable = clickableForReservation || clickableForOpenDay;
           const Tag = clickable ? "button" : "div";
-          const interactiveProps = clickable
+
+          const interactiveProps = clickableForReservation
             ? {
                 type: "button" as const,
-                onClick: () => onReservationClick(reservation!),
+                onClick: () => onReservationClick!(reservation!),
                 "aria-label": `Open ${reservation!.partyName} reservation details`,
+              }
+            : clickableForOpenDay
+            ? {
+                type: "button" as const,
+                onClick: () => onOpenDayClick!(day),
+                "aria-label": `Request the cottage starting ${format(day, "EEE, MMM d")}`,
               }
             : {};
 
@@ -87,7 +101,11 @@ export default function MonthView({ cursor, reservations, requests, onReservatio
                 "rounded-xl border px-2 pt-1 pb-1 overflow-hidden flex flex-col transition text-left w-full",
                 cellBg,
                 today ? "ring-2 ring-aqua ring-offset-1 ring-offset-white" : "",
-                clickable ? "cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua" : "",
+                clickableForReservation
+                  ? "cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua"
+                  : clickableForOpenDay
+                  ? "cursor-pointer hover:bg-foam hover:border-aqua focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua"
+                  : "",
               ].join(" ")}
             >
               {/* Top row: day number + today pill */}

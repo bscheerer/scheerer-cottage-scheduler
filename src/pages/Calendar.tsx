@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { addMonths, addWeeks } from "../lib/dates";
+import { addMonths, addWeeks, toISODate } from "../lib/dates";
 import { useReservations, useRequests, type Reservation } from "../lib/data";
 import { useCurrentRole } from "../lib/auth";
 import CalendarToolbar, { type ViewMode } from "../components/calendar/CalendarToolbar";
@@ -45,6 +45,13 @@ export default function Calendar() {
     setRequestModalOpen(true);
   }
 
+  /** Click on an open day cell — pre-fill RequestModal with that single day. */
+  function openRequestForDay(day: Date) {
+    const iso = toISODate(day);
+    setRequestPrefill({ start: iso, end: iso });
+    setRequestModalOpen(true);
+  }
+
   /**
    * Owner clicked "Request a change" inside ReservationModal. Close the
    * details modal and open RequestModal pre-filled with the reservation's
@@ -87,6 +94,7 @@ export default function Calendar() {
           reservations={reservations}
           requests={requests}
           onReservationClick={setSelectedReservation}
+          onOpenDayClick={openRequestForDay}
         />
       ) : (
         <WeekView
@@ -94,6 +102,7 @@ export default function Calendar() {
           reservations={reservations}
           requests={requests}
           onReservationClick={setSelectedReservation}
+          onOpenDayClick={openRequestForDay}
         />
       )}
 

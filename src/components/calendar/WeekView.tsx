@@ -6,6 +6,7 @@ interface Props {
   reservations: Reservation[];
   requests: Request[];
   onReservationClick?: (r: Reservation) => void;
+  onOpenDayClick?: (day: Date) => void;
 }
 
 /**
@@ -13,7 +14,9 @@ interface Props {
  * approved-teal color and show the party emoji + name; pending requests
  * use sunset amber.
  */
-export default function WeekView({ cursor, reservations, requests, onReservationClick }: Props) {
+export default function WeekView({
+  cursor, reservations, requests, onReservationClick, onOpenDayClick,
+}: Props) {
   const days = weekDays(cursor);
 
   return (
@@ -45,13 +48,22 @@ export default function WeekView({ cursor, reservations, requests, onReservation
             numColor = "text-driftwood";
           }
 
-          const clickable = !!reservation && !!onReservationClick;
+          const clickableForReservation = !!reservation && !!onReservationClick;
+          const clickableForOpenDay     = !reservation && !pending && !!onOpenDayClick;
+          const clickable = clickableForReservation || clickableForOpenDay;
           const Tag = clickable ? "button" : "div";
-          const interactiveProps = clickable
+
+          const interactiveProps = clickableForReservation
             ? {
                 type: "button" as const,
-                onClick: () => onReservationClick(reservation!),
+                onClick: () => onReservationClick!(reservation!),
                 "aria-label": `Open ${reservation!.partyName} reservation details`,
+              }
+            : clickableForOpenDay
+            ? {
+                type: "button" as const,
+                onClick: () => onOpenDayClick!(day),
+                "aria-label": `Request the cottage starting ${format(day, "EEE, MMM d")}`,
               }
             : {};
 
@@ -63,7 +75,11 @@ export default function WeekView({ cursor, reservations, requests, onReservation
                 "rounded-2xl border p-3 min-h-[260px] flex flex-col transition text-left w-full",
                 bg,
                 today ? "ring-2 ring-aqua ring-offset-1 ring-offset-white" : "",
-                clickable ? "cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua" : "",
+                clickableForReservation
+                  ? "cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua"
+                  : clickableForOpenDay
+                  ? "cursor-pointer hover:bg-foam hover:border-aqua focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua"
+                  : "",
               ].join(" ")}
             >
               <div className={`text-center pb-2 mb-2 border-b ${reservation || pending ? "border-white/20" : "border-deep/5"}`}>
