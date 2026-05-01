@@ -3,15 +3,16 @@ import { Link, NavLink } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
 import { Role, roleLabel } from "../lib/auth";
 import { useIdentity } from "../lib/identity";
+import Avatar from "./Avatar";
 
 interface Props {
   role: Role;
 }
 
 /**
- * Top brand bar — water + sunset gradient, role-aware navigation, signed-in
- * user's avatar (their chosen lake emoji, or their initials), and a quick
- * link to Settings.
+ * Top brand bar — water + sunset gradient, role-aware navigation, avatar
+ * (uploaded image, emoji, or initials) with a "Profile" label linking to
+ * Settings, and a sign-out button.
  */
 export default function BrandBar({ role }: Props) {
   const { picture, label, email } = useIdentity();
@@ -54,23 +55,26 @@ export default function BrandBar({ role }: Props) {
           <span className="hidden sm:inline-block bg-white/15 border border-white/35 rounded-full px-3 py-1 text-xs font-semibold tracking-wide">
             {roleLabel(role)}
           </span>
-          {/* Avatar links to Settings */}
+
+          {/* Avatar + "Profile" label, both link to /settings */}
           <Link
             to="/settings"
-            title="Settings"
-            aria-label="Settings"
-            className="rounded-full transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-white/70"
+            title="Profile & settings"
+            aria-label="Profile & settings"
+            className="flex flex-col items-center gap-0.5 transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-md p-0.5"
           >
-            {picture ? (
-              <span className="w-9 h-9 rounded-full bg-white/15 border-2 border-white/50 flex items-center justify-center text-xl leading-none">
-                <span aria-hidden>{picture}</span>
-              </span>
-            ) : (
-              <span className="w-9 h-9 rounded-full bg-gradient-to-br from-sunset-amber to-sunset-coral text-white font-bold text-sm flex items-center justify-center border-2 border-white/50">
-                {initials}
-              </span>
-            )}
+            <span className="border-2 border-white/50 rounded-full">
+              <Avatar
+                picture={picture}
+                fallbackInitials={initials}
+                size={36}
+              />
+            </span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-white/85 leading-none">
+              Profile
+            </span>
           </Link>
+
           <button
             onClick={() => signOut()}
             className="bg-white/10 hover:bg-white/20 transition rounded-lg px-3 py-1.5 text-xs font-semibold border border-white/30"

@@ -1,4 +1,5 @@
 import { updateUserAttributes } from "aws-amplify/auth";
+import { uploadData } from "aws-amplify/storage";
 
 /**
  * Theme-aligned avatar emoji picks. Five distinct shapes/colors that read
@@ -84,3 +85,72 @@ export function formatPhoneForDisplay(e164: string | null | undefined): string {
   }
   return e164;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Profile picture upload                                                     */
+/* -------------------------------------------------------------------------- */
+
+export const PICTURE_UPLOAD_PREFIX = "upload:";
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;     // 5 MB
+export const ACCEPTED_IMAGE_TYPES = [
+  "image/jpeg", "image/png", "image/webp", "image/gif",
+];
+
+/** True if a `picture` attribute value points at an uploaded image in S3. */
+export function isUploadedPicture(p: string | null | undefined): boolean {
+  return !!p && p.startsWith(PICTURE_UPLOAD_PREFIX);
+}
+
+/** Strip the "upload:" prefix to get the raw S3 path. */
+export function uploadedPicturePath(p: string): string {
+  return p.startsWith(PICTURE_UPLOAD_PREFIX)
+    ? p.slice(PICTURE_UPLOAD_PREFIX.length)
+    : p;
+}
+
+/**
+ * Upload a profile picture file to S3 under the user's identity-scoped path.
+ * Returns the value to store in the `picture` attribute (with the
+ * "upload:" prefix). Throws on validation or upload error.
+ *
+ * Path layout: `profile-pictures/{identityId}/avatar.{ext}`. Each user has
+ * exactly one avatar slot — uploading replaces it.
+ */
+export async function uploadProfilePicture(
+  file: File,
+  onProgress?: (fraction: number) => void
+): Promise<string> {
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+    throw new Error("Please choose a JPG, PNG, WEBP, or GIF image.");
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    throw new Error(`Image must be under ${Math.round(MAX_AVATAR_BYTES / 1024 / 1024)} MB.`);
+  }
+
+  const ext = file.name.includes(".")
+    ? file.name.split(".").pop()!.toLowerCase()
+    : (file.type.split("/")[1] ?? "jpg");
+  const safeExt = ext.replace(/[^a-z0-9]/g, "").slice(0, 5) || "jpg";
+  // {identity_id} is filled in by Amplify Storage at upload time.
+  const path = ({ identityId }: { identityId?: string }) =>
+    `profile-pictures/${identityId}/avatar.${safeExt}`;
+
+  const op = uploadData({
+    path,
+    data: file,
+    options: {
+      contentType: file.type,
+      onProgress: (event) => {
+        if (event.totalBytes && onProgress) {
+          onProgress(event.transferredBytes / event.totalBytes);
+        }
+      },
+    },
+  });
+
+  const result = await op.result;
+  // `result.path` is the resolved path (with identityId substituted in).
+  const finalPath = (result as unknown as { path: string }).path;
+  return `${PICTURE_UPLOAD_PREFIX}${finalPath}`;
+}
+

@@ -5,6 +5,7 @@ import { auth } from "./auth/resource";
 import { postConfirmation } from "./auth/post-confirmation/resource";
 import { data } from "./data/resource";
 import { manageUsers } from "./functions/manage-users/resource";
+import { storage } from "./storage/resource";
 
 /**
  * Scheerer Cottage Scheduler — Amplify Gen 2 backend entrypoint.
@@ -25,6 +26,7 @@ export const backend = defineBackend({
   data,
   manageUsers,
   postConfirmation,
+  storage,
 });
 
 const userPoolArn = backend.auth.resources.userPool.userPoolArn;

@@ -1,15 +1,19 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useIdentity } from "../lib/identity";
-import { AVATAR_EMOJIS, formatPhoneForDisplay, normalizePhone, updateProfile } from "../lib/profile";
+import {
+  AVATAR_EMOJIS, formatPhoneForDisplay, isUploadedPicture, normalizePhone,
+  PICTURE_UPLOAD_PREFIX, updateProfile, uploadProfilePicture,
+} from "../lib/profile";
+import Avatar from "../components/Avatar";
 
 /**
- * User-settings page. Self-service profile management:
- *  - Email (read-only, since it's the Cognito identifier)
- *  - Display name (preferred_username, editable)
- *  - Profile picture: a default initials avatar plus 5 theme-aligned emojis
+ * User-settings page. Edit display name, phone, and profile picture.
  *
- * Saves via Amplify's `updateUserAttributes`, then refetches the shared
- * Identity context so the BrandBar avatar updates instantly.
+ * Profile picture options:
+ *   - Default initials avatar
+ *   - 5 lake-themed emojis
+ *   - Upload your own image (stored in S3, referenced via "upload:" prefix
+ *     in the Cognito `picture` attribute)
  */
 export default function Settings() {
   const { email, preferredUsername, picture, phoneNumber, label, refetch, loading } = useIdentity();
@@ -17,11 +21,14 @@ export default function Settings() {
   const [displayName, setDisplayName]     = useState(preferredUsername ?? "");
   const [chosenPicture, setChosenPicture] = useState<string>(picture ?? "");
   const [phoneInput, setPhoneInput]       = useState(formatPhoneForDisplay(phoneNumber));
+  const [pendingFile, setPendingFile]     = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [savedAt, setSavedAt]             = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync form fields when identity finishes loading.
   useEffect(() => {
     if (!loading) {
       setDisplayName(preferredUsername ?? "");
@@ -30,15 +37,44 @@ export default function Settings() {
     }
   }, [loading, preferredUsername, picture, phoneNumber]);
 
-  // Compute the normalized phone (E.164) from what the user typed.
-  // null = invalid, "" = clearing, "+..." = valid E.164.
+  // Local object URL for the file the user just selected (preview only).
+  useEffect(() => {
+    if (!pendingFile) { setPendingPreviewUrl(null); return; }
+    const url = URL.createObjectURL(pendingFile);
+    setPendingPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingFile]);
+
   const normalizedPhone = normalizePhone(phoneInput);
   const phoneInvalid = phoneInput.trim().length > 0 && normalizedPhone === null;
 
   const dirty =
     displayName !== (preferredUsername ?? "") ||
     chosenPicture !== (picture ?? "") ||
+    pendingFile !== null ||
     (normalizedPhone !== null && normalizedPhone !== (phoneNumber ?? ""));
+
+  function onPickFile() {
+    fileInputRef.current?.click();
+  }
+
+  function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setError(null);
+    setPendingFile(f);
+    // Mark "I'll be using an upload" so chosenPicture isn't an emoji.
+    // The actual storage path comes from uploadProfilePicture on save.
+    setChosenPicture(PICTURE_UPLOAD_PREFIX + "pending");
+    e.target.value = ""; // allow re-selecting the same file
+  }
+
+  function clearPendingFile() {
+    setPendingFile(null);
+    // Revert to whatever was the original picture (so the picker reflects
+    // the saved state rather than a half-applied upload choice).
+    setChosenPicture(picture ?? "");
+  }
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -48,21 +84,38 @@ export default function Settings() {
     setError(null);
     setSavedAt(null);
     try {
+      let pictureToSave: string | undefined =
+        chosenPicture !== (picture ?? "") ? chosenPicture : undefined;
+
+      // If the user picked a file, upload it and replace pictureToSave
+      // with the actual S3 path returned by uploadProfilePicture.
+      if (pendingFile) {
+        setUploadProgress(0);
+        pictureToSave = await uploadProfilePicture(pendingFile, (frac) =>
+          setUploadProgress(Math.round(frac * 100))
+        );
+        setUploadProgress(null);
+      }
+
       await updateProfile({
         preferredUsername: displayName.trim(),
-        picture: chosenPicture, // empty string = "use initials"
+        picture: pictureToSave,
         phoneNumber: normalizedPhone ?? undefined,
       });
+      setPendingFile(null);
       await refetch();
       setSavedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings.");
+      setUploadProgress(null);
     } finally {
       setSaving(false);
     }
   }
 
   const initials = (preferredUsername || email || "?").slice(0, 2).toUpperCase();
+  const previewPicture =
+    pendingPreviewUrl ? null /* show pendingPreviewUrl directly below */ : chosenPicture;
 
   return (
     <section className="max-w-2xl mx-auto space-y-6">
@@ -79,7 +132,17 @@ export default function Settings() {
       >
         {/* Live preview */}
         <div className="flex items-center gap-3 pb-5 border-b border-deep/5">
-          <AvatarPreview emoji={chosenPicture} initials={initials} />
+          {pendingPreviewUrl ? (
+            <span className="w-14 h-14 rounded-full overflow-hidden border-2 border-aqua/40 flex-shrink-0">
+              <img src={pendingPreviewUrl} alt="" className="w-full h-full object-cover" />
+            </span>
+          ) : (
+            <Avatar
+              picture={previewPicture ?? null}
+              fallbackInitials={initials}
+              size={56}
+            />
+          )}
           <div>
             <div className="font-display text-lg text-deep">
               {displayName.trim() || label || "Family member"}
@@ -127,10 +190,7 @@ export default function Settings() {
             onChange={(e) => setPhoneInput(e.target.value)}
             placeholder="(212) 555-1234"
             maxLength={30}
-            className={[
-              inputCls,
-              phoneInvalid ? "border-denied focus:ring-denied" : "",
-            ].join(" ")}
+            className={[inputCls, phoneInvalid ? "border-denied focus:ring-denied" : ""].join(" ")}
             aria-invalid={phoneInvalid}
           />
           {phoneInvalid ? (
@@ -148,31 +208,86 @@ export default function Settings() {
 
         {/* Profile picture */}
         <Field label="Profile picture">
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Initials default */}
             <PictureChoice
               chosen={chosenPicture === ""}
-              onClick={() => setChosenPicture("")}
+              onClick={() => { clearPendingFile(); setChosenPicture(""); }}
               ariaLabel="Use initials"
             >
               <span className="font-bold text-deep">{initials}</span>
             </PictureChoice>
+
+            {/* Emoji choices */}
             {AVATAR_EMOJIS.map((opt) => (
               <PictureChoice
                 key={opt.value}
                 chosen={chosenPicture === opt.value}
-                onClick={() => setChosenPicture(opt.value)}
+                onClick={() => { clearPendingFile(); setChosenPicture(opt.value); }}
                 ariaLabel={opt.label}
               >
                 <span className="text-2xl leading-none" aria-hidden>{opt.value}</span>
               </PictureChoice>
             ))}
+
+            {/* Upload your own */}
+            <button
+              type="button"
+              onClick={onPickFile}
+              aria-label="Upload your own picture"
+              title="Upload your own picture"
+              className={[
+                "w-14 h-14 rounded-full flex items-center justify-center border-2 border-dashed transition overflow-hidden",
+                pendingFile || isUploadedPicture(chosenPicture)
+                  ? "border-mid bg-foam shadow-soft scale-105"
+                  : "border-deep/20 bg-white hover:border-aqua hover:bg-foam/50",
+              ].join(" ")}
+            >
+              {pendingPreviewUrl ? (
+                <img src={pendingPreviewUrl} alt="" className="w-full h-full object-cover" />
+              ) : isUploadedPicture(picture ?? "") && !pendingFile ? (
+                <Avatar picture={picture ?? null} fallbackInitials={initials} size={56} />
+              ) : (
+                <UploadIcon />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              hidden
+              onChange={onFileChosen}
+            />
           </div>
           <p className="text-xs text-muted mt-2">
-            Pick the default initials or one of the lake-themed emojis.
+            Pick the default initials, one of the lake-themed emojis, or upload
+            your own picture (JPG/PNG/WEBP, up to 5 MB).
           </p>
+          {pendingFile && (
+            <p className="text-xs text-mid mt-1">
+              {pendingFile.name} ({Math.round(pendingFile.size / 1024)} KB) ready to upload on Save.
+              <button
+                type="button"
+                onClick={clearPendingFile}
+                className="ml-2 underline hover:text-deep"
+              >
+                discard
+              </button>
+            </p>
+          )}
+          {uploadProgress !== null && (
+            <div className="mt-2">
+              <div className="h-1.5 bg-foam rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-aqua transition-all"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted mt-1">Uploading… {uploadProgress}%</p>
+            </div>
+          )}
         </Field>
 
-        {/* Banners */}
         {error && (
           <div className="rounded-xl border border-denied/40 bg-[#F4DAD0] px-3 py-2 text-sm text-[#7A2F18]">
             {error}
@@ -184,7 +299,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Submit */}
         <div className="flex justify-end gap-2">
           <button
             type="submit"
@@ -204,7 +318,7 @@ const inputCls =
   "w-full border border-deep/15 rounded-lg px-3 py-2 bg-offwhite text-ink " +
   "focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
       <div className="text-[11px] font-bold uppercase tracking-wider text-mid mb-1">
@@ -221,7 +335,7 @@ function PictureChoice({
   chosen: boolean;
   onClick: () => void;
   ariaLabel: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -242,17 +356,13 @@ function PictureChoice({
   );
 }
 
-function AvatarPreview({ emoji, initials }: { emoji: string; initials: string }) {
-  if (emoji) {
-    return (
-      <div className="w-14 h-14 rounded-full bg-foam border-2 border-aqua/40 flex items-center justify-center text-3xl leading-none">
-        <span aria-hidden>{emoji}</span>
-      </div>
-    );
-  }
+function UploadIcon() {
   return (
-    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-mid to-deep text-white font-bold flex items-center justify-center">
-      {initials}
-    </div>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-mid">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
   );
 }

@@ -5,6 +5,7 @@ import {
 import { useIdentity } from "../lib/identity";
 import { type Role } from "../lib/auth";
 import { format, parseISO, toISODate } from "../lib/dates";
+import Avatar from "./Avatar";
 
 interface Props {
   reservation: Reservation | null;
@@ -107,7 +108,8 @@ export default function ReservationModal({
     }
   }
 
-  const headerEmoji = reservation.partyEmoji || sourceRequest?.requesterEmoji || "";
+  const headerPicture = reservation.partyEmoji || sourceRequest?.requesterEmoji || "";
+  const headerInitials = (reservation.partyName ?? "?").slice(0, 2).toUpperCase();
   const dateRange = formatDateRange(reservation.startDate ?? "", reservation.endDate ?? "");
   const today = toISODate(new Date());
 
@@ -123,12 +125,12 @@ export default function ReservationModal({
       <div className="bg-white rounded-2xl shadow-lift border border-deep/10 w-full max-w-lg p-6 max-h-[90vh] overflow-auto">
         {/* Header */}
         <div className="flex items-start gap-4 pb-4 border-b border-deep/5">
-          <div
-            className="w-16 h-16 rounded-2xl bg-approved/15 border border-approved/30 flex items-center justify-center text-3xl flex-shrink-0"
-            aria-hidden
-          >
-            {headerEmoji || (reservation.partyName ?? "?").slice(0, 2).toUpperCase()}
-          </div>
+          <Avatar
+            picture={headerPicture}
+            fallbackInitials={headerInitials}
+            size={64}
+            className="border border-approved/30"
+          />
           <div className="min-w-0">
             <h3 id="reservation-modal-title" className="font-display text-2xl text-deep truncate">
               {reservation.partyName ?? "Reserved"}
