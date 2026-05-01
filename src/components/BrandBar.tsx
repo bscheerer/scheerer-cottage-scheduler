@@ -1,19 +1,23 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
 import { Role, roleLabel } from "../lib/auth";
+import { useIdentity } from "../lib/identity";
 
 interface Props {
   role: Role;
 }
 
 /**
- * Top brand bar. The gradient evokes the lake-and-sunset palette from the
- * design plan. Navigation items are filtered by role.
+ * Top brand bar — water + sunset gradient, role-aware navigation, signed-in
+ * user's avatar (their chosen lake emoji, or their initials), and a quick
+ * link to Settings.
  */
 export default function BrandBar({ role }: Props) {
+  const { picture, label, email } = useIdentity();
   const isAdmin = role === "Admin" || role === "SuperUser";
   const isSuper = role === "SuperUser";
+  const initials = (label || email || "?").slice(0, 2).toUpperCase();
 
   return (
     <header
@@ -50,6 +54,23 @@ export default function BrandBar({ role }: Props) {
           <span className="hidden sm:inline-block bg-white/15 border border-white/35 rounded-full px-3 py-1 text-xs font-semibold tracking-wide">
             {roleLabel(role)}
           </span>
+          {/* Avatar links to Settings */}
+          <Link
+            to="/settings"
+            title="Settings"
+            aria-label="Settings"
+            className="rounded-full transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-white/70"
+          >
+            {picture ? (
+              <span className="w-9 h-9 rounded-full bg-white/15 border-2 border-white/50 flex items-center justify-center text-xl leading-none">
+                <span aria-hidden>{picture}</span>
+              </span>
+            ) : (
+              <span className="w-9 h-9 rounded-full bg-gradient-to-br from-sunset-amber to-sunset-coral text-white font-bold text-sm flex items-center justify-center border-2 border-white/50">
+                {initials}
+              </span>
+            )}
+          </Link>
           <button
             onClick={() => signOut()}
             className="bg-white/10 hover:bg-white/20 transition rounded-lg px-3 py-1.5 text-xs font-semibold border border-white/30"

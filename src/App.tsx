@@ -7,17 +7,19 @@ import Calendar from "./pages/Calendar";
 import MyRequests from "./pages/MyRequests";
 import ApprovalQueue from "./pages/ApprovalQueue";
 import UsersAndRoles from "./pages/UsersAndRoles";
+import Settings from "./pages/Settings";
 import { useCurrentRole } from "./lib/auth";
+import { IdentityProvider } from "./lib/identity";
 
 /**
  * Top-level app: wraps everything in the Amplify Authenticator so unauthenticated
- * visitors see the sign-in / sign-up screen. Once signed in, BrandBar + routes render.
+ * visitors see the sign-in / sign-up screen. Once signed in, IdentityProvider
+ * shares the Cognito user attributes with every consumer (BrandBar, Settings,
+ * RequestModal, etc.) so a Settings save instantly updates the brand bar.
  */
 export default function App() {
   return (
     <Authenticator
-      // We allow sign-up; a SuperUser still has to promote brand-new users to
-      // Viewer/Admin via the Cognito console (or, in Phase 4, the in-app page).
       signUpAttributes={["email", "preferred_username"]}
       components={{
         Header() {
@@ -39,7 +41,9 @@ export default function App() {
         },
       }}
     >
-      <SignedInApp />
+      <IdentityProvider>
+        <SignedInApp />
+      </IdentityProvider>
     </Authenticator>
   );
 }
@@ -55,6 +59,7 @@ function SignedInApp() {
           <Route path="/" element={<Navigate to="/calendar" replace />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/my-requests" element={<MyRequests />} />
+          <Route path="/settings" element={<Settings />} />
 
           {/* Admin & SuperUser only */}
           <Route
@@ -79,7 +84,7 @@ function SignedInApp() {
         </Routes>
       </main>
       <footer className="text-center text-xs text-muted py-6">
-        Scheerer Cottage Scheduler · v0.1 (Phase 1 foundation)
+        Scheerer Cottage Scheduler · v0.5
       </footer>
     </div>
   );

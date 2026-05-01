@@ -21,6 +21,7 @@ export const auth = defineAuth({
     email: { required: true, mutable: false },
     preferredUsername: { required: false, mutable: true },
     profilePicture: { required: false, mutable: true },
+    phoneNumber: { required: false, mutable: true },
   },
   groups: ["SuperUser", "Admin", "Viewer"],
   triggers: {
