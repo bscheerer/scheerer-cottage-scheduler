@@ -21,7 +21,12 @@ export const auth = defineAuth({
     email: { required: true, mutable: false },
     preferredUsername: { required: false, mutable: true },
     profilePicture: { required: false, mutable: true },
-    phoneNumber: { required: false, mutable: true },
+    // NOTE: phone is stored as the custom attribute `custom:phone`, added to
+    // the user pool via a one-time CLI command (see PHASE5.md). Cognito does
+    // not allow adding *standard* attributes to an existing pool, but it does
+    // allow adding custom ones. The custom attribute lives in the pool but is
+    // intentionally not declared here — declaring it would trigger a Cognito
+    // schema-update that's also disallowed for existing pools.
   },
   groups: ["SuperUser", "Admin", "Viewer"],
   triggers: {

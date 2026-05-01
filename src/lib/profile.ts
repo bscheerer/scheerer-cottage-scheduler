@@ -20,9 +20,9 @@ export interface ProfileUpdate {
   /** Cognito `picture` — emoji character or empty string for "use initials". */
   picture?: string;
   /**
-   * Cognito `phone_number`. MUST be E.164 format (e.g. "+12125551234") or
-   * empty string to clear. Use `normalizePhone()` first to coerce common
-   * US-style inputs into the right format.
+   * Phone number, stored as the custom attribute `custom:phone`. Free-form
+   * by design (no Cognito format constraint), but `normalizePhone()` is
+   * provided to coerce US-style inputs into E.164 for consistency.
    */
   phoneNumber?: string;
 }
@@ -40,7 +40,8 @@ export async function updateProfile(updates: ProfileUpdate): Promise<void> {
     userAttributes["picture"] = updates.picture;
   }
   if (updates.phoneNumber !== undefined) {
-    userAttributes["phone_number"] = updates.phoneNumber;
+    // Stored as a custom attribute. See amplify/auth/resource.ts for why.
+    userAttributes["custom:phone"] = updates.phoneNumber;
   }
   if (Object.keys(userAttributes).length === 0) return;
 

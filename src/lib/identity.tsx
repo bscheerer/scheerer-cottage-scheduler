@@ -52,7 +52,9 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       const preferredUsername = attrs.preferred_username ?? null;
       const email             = attrs.email ?? user.signInDetails?.loginId ?? user.username ?? null;
       const picture           = attrs.picture ?? null;
-      const phoneNumber       = attrs.phone_number ?? null;
+      // Stored as a custom attribute (added to the pool out-of-band — see
+      // amplify/auth/resource.ts).
+      const phoneNumber       = (attrs as Record<string, string | undefined>)["custom:phone"] ?? null;
       setState({
         userId:            user.userId,
         username:          user.username,
