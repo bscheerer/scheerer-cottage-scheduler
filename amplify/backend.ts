@@ -74,3 +74,54 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
     resources: [userPoolWildcardArn],
   })
 );
+
+// --- Storage access for Cognito group roles --------------------------------
+//
+// `defineStorage` with `allow.entity('identity')` attaches the storage policy
+// to the *default* authenticated identity-pool role. But our Cognito groups
+// (SuperUser, Admin, Viewer) each get their own IAM role, and a user in a
+// group assumes the group role instead of the default. Result: writes fail
+// with "not authorized to perform s3:PutObject" until we extend each group
+// role with the same storage permissions.
+//
+// We scope writes/deletes to the user's own profile-pictures/{identityId}/
+// folder using the IAM policy variable ${cognito-identity.amazonaws.com:sub}.
+// Reads are allowed against profile-pictures/* so other family members can
+// see avatars.
+
+const storageBucket = backend.storage.resources.bucket;
+const ownPathArn   = storageBucket.arnForObjects(
+  "profile-pictures/${cognito-identity.amazonaws.com:sub}/*"
+);
+const allPathArn   = storageBucket.arnForObjects("profile-pictures/*");
+
+const ownerWritePolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+  resources: [ownPathArn],
+});
+const everyoneReadPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: ["s3:GetObject"],
+  resources: [allPathArn],
+});
+const listProfilesPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: ["s3:ListBucket"],
+  resources: [storageBucket.bucketArn],
+  conditions: {
+    StringLike: {
+      "s3:prefix": ["profile-pictures/", "profile-pictures/*"],
+    },
+  },
+});
+
+const groupNames = ["SuperUser", "Admin", "Viewer"] as const;
+for (const name of groupNames) {
+  // The `groups` map type isn't strictly typed by Amplify Gen 2; cast loosely.
+  const role = (backend.auth.resources.groups as Record<string, { role?: { addToPrincipalPolicy: (p: PolicyStatement) => void } }>)[name]?.role;
+  if (!role) continue;
+  role.addToPrincipalPolicy(ownerWritePolicy);
+  role.addToPrincipalPolicy(everyoneReadPolicy);
+  role.addToPrincipalPolicy(listProfilesPolicy);
+}
