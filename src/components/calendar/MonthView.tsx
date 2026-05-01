@@ -1,5 +1,4 @@
 import { format, isSameMonth, isToday, monthGridDays, toISODate } from "../../lib/dates";
-import EventChip, { type EventKind } from "./EventChip";
 import type { Reservation, Request } from "../../lib/data";
 
 interface Props {
@@ -11,9 +10,11 @@ interface Props {
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /**
- * Default monthly grid: 7 columns × 6 rows (always — keeps row heights stable
- * across months). Days outside the cursor month render in muted sand tone so
- * the eye stays inside the current month at a glance.
+ * Default monthly grid: 7 columns × 6 rows. Reserved days fully fill their
+ * cell with the approved-teal color and show the party name + their emoji
+ * (snapshotted at request time, set in profile Settings). Pending requests
+ * fill in warm sunset amber. Multi-day stays render the name + emoji on the
+ * start day only and just-color the rest of the span — quick to scan.
  */
 export default function MonthView({ cursor, reservations, requests }: Props) {
   const days = monthGridDays(cursor);
@@ -37,30 +38,47 @@ export default function MonthView({ cursor, reservations, requests }: Props) {
           const today   = isToday(day);
           const dayISO  = toISODate(day);
 
-          // Match each day against existing reservations + requests.
-          const dayReservations = reservations.filter(
+          // Approved reservation overlapping this day, if any.
+          const reservation = reservations.find(
             (r) => r.startDate && r.endDate &&
                    dayISO >= r.startDate && dayISO <= r.endDate
           );
-          const dayRequests = requests.filter(
+          // Pending request overlapping this day, if any (and only when no
+          // reservation occupies the cell).
+          const pending = !reservation && requests.find(
             (r) => r.status === "Pending" && r.startDate && r.endDate &&
                    dayISO >= r.startDate && dayISO <= r.endDate
           );
+
+          // The "start day" of the span is where we render the label.
+          const reservationIsStart = reservation && dayISO === reservation.startDate;
+          const pendingIsStart     = pending     && dayISO === pending.startDate;
+
+          // Cell background + text colors per state.
+          let cellBg = "bg-white border-deep/10";
+          let dayNumColor = inMonth ? "text-deep" : "text-driftwood/60";
+          if (reservation) {
+            cellBg = "bg-approved border-approved";
+            dayNumColor = "text-white/80";
+          } else if (pending) {
+            cellBg = "bg-sunset-amber border-sunset-amber";
+            dayNumColor = "text-driftwood/80";
+          } else if (!inMonth) {
+            cellBg = "bg-sand-light text-muted border-sand-deep/30";
+          }
 
           return (
             <div
               key={day.toISOString()}
               className={[
-                "rounded-xl border bg-white px-2 pt-1 pb-1 overflow-hidden transition",
-                inMonth ? "border-deep/10" : "bg-sand-light text-muted border-sand-deep/30",
-                today   ? "ring-2 ring-aqua border-aqua" : "",
+                "rounded-xl border px-2 pt-1 pb-1 overflow-hidden flex flex-col transition",
+                cellBg,
+                today ? "ring-2 ring-aqua ring-offset-1 ring-offset-white" : "",
               ].join(" ")}
             >
+              {/* Top row: day number + today pill */}
               <div className="flex items-center justify-between">
-                <span className={[
-                  "text-[13px] font-bold",
-                  inMonth ? "text-deep" : "text-driftwood/60",
-                ].join(" ")}>
+                <span className={`text-[13px] font-bold ${dayNumColor}`}>
                   {format(day, "d")}
                 </span>
                 {today && (
@@ -70,30 +88,44 @@ export default function MonthView({ cursor, reservations, requests }: Props) {
                 )}
               </div>
 
-              {dayReservations.map((r) => (
-                <EventChip
-                  key={`r-${r.id}`}
-                  day={day}
-                  startISO={r.startDate!}
-                  endISO={r.endDate!}
-                  label={r.partyName ?? "Reserved"}
-                  kind="approved"
-                />
-              ))}
-              {dayRequests.map((r) => (
-                <EventChip
-                  key={`q-${r.id}`}
-                  day={day}
-                  startISO={r.startDate!}
-                  endISO={r.endDate!}
-                  label={`${r.partyName ?? "Request"} · pending`}
-                  kind={"pending" as EventKind}
-                />
-              ))}
+              {/* Body: party label only on the start day of a span */}
+              <div className="flex-1 flex items-center justify-center text-center px-1">
+                {reservationIsStart && (
+                  <ReservationLabel
+                    name={reservation.partyName ?? "Reserved"}
+                    emoji={reservation.partyEmoji ?? ""}
+                    tone="approved"
+                  />
+                )}
+                {pendingIsStart && (
+                  <ReservationLabel
+                    name={pending.partyName ?? "Pending"}
+                    emoji={pending.requesterEmoji ?? ""}
+                    tone="pending"
+                  />
+                )}
+              </div>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function ReservationLabel({
+  name, emoji, tone,
+}: { name: string; emoji: string; tone: "approved" | "pending" }) {
+  const text = tone === "approved" ? "text-white" : "text-driftwood";
+  return (
+    <div className={`flex flex-col items-center gap-0.5 leading-tight ${text}`}>
+      {emoji && <span className="text-2xl leading-none" aria-hidden>{emoji}</span>}
+      <span className="text-[11px] font-bold truncate max-w-[100px]" title={name}>
+        {name}
+      </span>
+      {tone === "pending" && (
+        <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">Pending</span>
+      )}
     </div>
   );
 }

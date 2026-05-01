@@ -8,10 +8,9 @@ interface Props {
 }
 
 /**
- * Compact weekly view — 7 columns, one tall column per day. Reservations
- * render as full-day blocks; pending requests show stacked beneath. We
- * deliberately don't render hour rows in v0.2 because the cottage is booked
- * by the day, not the hour.
+ * Weekly view — 7 wide day cards. Reserved days are fully filled with the
+ * approved-teal color and show the party emoji + name; pending requests
+ * use sunset amber.
  */
 export default function WeekView({ cursor, reservations, requests }: Props) {
   const days = weekDays(cursor);
@@ -23,61 +22,84 @@ export default function WeekView({ cursor, reservations, requests }: Props) {
           const dayISO = toISODate(day);
           const today  = isToday(day);
 
-          const dayReservations = reservations.filter(
+          const reservation = reservations.find(
             (r) => r.startDate && r.endDate &&
                    dayISO >= r.startDate && dayISO <= r.endDate
           );
-          const dayRequests = requests.filter(
+          const pending = !reservation && requests.find(
             (r) => r.status === "Pending" && r.startDate && r.endDate &&
                    dayISO >= r.startDate && dayISO <= r.endDate
           );
+
+          let bg = "bg-white border-deep/10";
+          let dowColor = "text-muted";
+          let numColor = "text-deep";
+          if (reservation) {
+            bg = "bg-approved border-approved";
+            dowColor = "text-white/80";
+            numColor = "text-white";
+          } else if (pending) {
+            bg = "bg-sunset-amber border-sunset-amber";
+            dowColor = "text-driftwood/70";
+            numColor = "text-driftwood";
+          }
 
           return (
             <div
               key={day.toISOString()}
               className={[
-                "rounded-2xl border bg-white p-3 min-h-[260px] transition",
-                today ? "ring-2 ring-aqua border-aqua" : "border-deep/10",
+                "rounded-2xl border p-3 min-h-[260px] flex flex-col transition",
+                bg,
+                today ? "ring-2 ring-aqua ring-offset-1 ring-offset-white" : "",
               ].join(" ")}
             >
-              <div className="text-center pb-2 mb-2 border-b border-deep/5">
-                <div className="text-[11px] font-bold tracking-widest uppercase text-muted">
+              <div className={`text-center pb-2 mb-2 border-b ${reservation || pending ? "border-white/20" : "border-deep/5"}`}>
+                <div className={`text-[11px] font-bold tracking-widest uppercase ${dowColor}`}>
                   {format(day, "EEE")}
                 </div>
-                <div className="font-display text-2xl text-deep leading-tight">
+                <div className={`font-display text-2xl leading-tight ${numColor}`}>
                   {format(day, "d")}
                 </div>
               </div>
 
-              <div className="space-y-2">
-                {dayReservations.length === 0 && dayRequests.length === 0 && (
-                  <div className="text-center text-xs text-muted/70 italic pt-6">
-                    Open
-                  </div>
+              <div className="flex-1 flex items-center justify-center text-center">
+                {reservation ? (
+                  <CellLabel
+                    name={reservation.partyName ?? "Reserved"}
+                    emoji={reservation.partyEmoji ?? ""}
+                    tone="approved"
+                  />
+                ) : pending ? (
+                  <CellLabel
+                    name={pending.partyName ?? "Pending"}
+                    emoji={pending.requesterEmoji ?? ""}
+                    tone="pending"
+                  />
+                ) : (
+                  <span className="text-xs text-muted/70 italic">Open</span>
                 )}
-                {dayReservations.map((r) => (
-                  <div
-                    key={`r-${r.id}`}
-                    className="rounded-lg px-2.5 py-1.5 text-[12px] font-semibold bg-approved text-white shadow-soft"
-                    title={`${r.partyName ?? "Reserved"} · ${r.startDate} → ${r.endDate}`}
-                  >
-                    {r.partyName ?? "Reserved"}
-                  </div>
-                ))}
-                {dayRequests.map((r) => (
-                  <div
-                    key={`q-${r.id}`}
-                    className="rounded-lg px-2.5 py-1.5 text-[12px] font-semibold bg-sunset-amber text-driftwood shadow-soft"
-                    title={`${r.partyName ?? "Request"} · pending`}
-                  >
-                    {r.partyName ?? "Request"} · pending
-                  </div>
-                ))}
               </div>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function CellLabel({
+  name, emoji, tone,
+}: { name: string; emoji: string; tone: "approved" | "pending" }) {
+  const text = tone === "approved" ? "text-white" : "text-driftwood";
+  return (
+    <div className={`flex flex-col items-center gap-1 ${text}`}>
+      {emoji && <span className="text-4xl leading-none" aria-hidden>{emoji}</span>}
+      <span className="text-sm font-bold text-center px-1" title={name}>
+        {name}
+      </span>
+      {tone === "pending" && (
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Pending</span>
+      )}
     </div>
   );
 }

@@ -112,10 +112,14 @@ export default function ApprovalQueue() {
             {pending.map((r) => (
               <li key={r.id} className="px-5 py-4 flex flex-wrap items-center gap-4">
                 <div className="flex-1 min-w-[260px]">
-                  <div className="font-semibold text-deep">{r.partyName ?? "Request"}</div>
+                  <div className="flex items-center gap-2">
+                    {r.requesterEmoji && (
+                      <span className="text-xl leading-none" aria-hidden>{r.requesterEmoji}</span>
+                    )}
+                    <div className="font-semibold text-deep">{r.partyName ?? "Request"}</div>
+                  </div>
                   <div className="text-sm text-muted mt-1">
-                    {r.startDate} → {r.endDate} · {r.guestCount} guest{r.guestCount === 1 ? "" : "s"}
-                    {r.petsAllowed ? " · pet" : ""}
+                    {r.startDate} → {r.endDate}
                   </div>
                   {r.note && <div className="text-sm text-ink/70 mt-1 italic">"{r.note}"</div>}
                 </div>
@@ -153,6 +157,9 @@ export default function ApprovalQueue() {
               <li key={r.id} className="px-5 py-3 flex flex-wrap items-center gap-3">
                 <div className="flex-1 min-w-[220px]">
                   <div className="flex items-center gap-2">
+                    {r.requesterEmoji && (
+                      <span className="text-base leading-none" aria-hidden>{r.requesterEmoji}</span>
+                    )}
                     <span className="font-semibold text-deep">{r.partyName ?? "Request"}</span>
                     <span className={[
                       "text-[11px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase",

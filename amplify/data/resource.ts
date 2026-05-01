@@ -50,6 +50,9 @@ const schema = a.schema({
       startDate: a.date().required(),
       endDate: a.date().required(),
       partyName: a.string().required(),
+      // Snapshot of the requester's emoji avatar at approve time. Rendered
+      // on the calendar so each reservation is recognizable at a glance.
+      partyEmoji: a.string(),
       guestCount: a.integer().default(1),
       petsAllowed: a.boolean().default(false),
       notes: a.string(),
@@ -69,6 +72,8 @@ const schema = a.schema({
       startDate: a.date().required(),
       endDate: a.date().required(),
       partyName: a.string().required(),
+      // Emoji snapshot from the requester's profile, captured at request time.
+      requesterEmoji: a.string(),
       guestCount: a.integer().default(1),
       petsAllowed: a.boolean().default(false),
       note: a.string(),

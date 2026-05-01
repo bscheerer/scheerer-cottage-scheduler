@@ -15,34 +15,28 @@ interface Props {
 }
 
 /**
- * Modal form for submitting a date request. Responsive and keyboard-accessible:
- * Escape closes; first field auto-focuses; backdrop click closes.
- *
- * Shows a live conflict warning if the chosen range overlaps any approved
- * reservation — admins can still see the request, but the user is warned
- * up-front to choose different dates.
+ * Modal form for submitting a date request. Trimmed to the essentials:
+ * arrive / depart, party name, optional note. The requester's emoji avatar
+ * (chosen in Settings) is captured at submit time so the calendar can show
+ * it on the reservation chip later.
  */
 export default function RequestModal({
   open, onClose, initialStart, initialEnd, reservations, onSuccess,
 }: Props) {
   const today = toISODate(new Date());
-  const { userId, label, loading: identityLoading } = useIdentity();
+  const { userId, label, picture, loading: identityLoading } = useIdentity();
 
-  const [startDate, setStartDate]     = useState(initialStart ?? today);
-  const [endDate, setEndDate]         = useState(initialEnd ?? today);
-  const [partyName, setPartyName]     = useState(label ?? "");
-  const [guestCount, setGuestCount]   = useState(2);
-  const [petsAllowed, setPetsAllowed] = useState(false);
-  const [note, setNote]               = useState("");
-  const [submitting, setSubmitting]   = useState(false);
-  const [error, setError]             = useState<string | null>(null);
+  const [startDate, setStartDate] = useState(initialStart ?? today);
+  const [endDate, setEndDate]     = useState(initialEnd ?? today);
+  const [partyName, setPartyName] = useState(label ?? "");
+  const [note, setNote]           = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
 
   const firstInput = useRef<HTMLInputElement>(null);
 
-  // Keep partyName synced with the user's label once identity loads.
   useEffect(() => { if (label && !partyName) setPartyName(label); }, [label, partyName]);
 
-  // Reset on open
   useEffect(() => {
     if (open) {
       setError(null);
@@ -53,7 +47,6 @@ export default function RequestModal({
     }
   }, [open, initialStart, initialEnd]);
 
-  // Escape closes
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -63,15 +56,13 @@ export default function RequestModal({
 
   if (!open) return null;
 
-  // Conflict preview against approved reservations
   const conflict = reservations.find(
     (r) => r.startDate && r.endDate && overlaps(startDate, endDate, r.startDate, r.endDate)
   );
 
   const datesValid = startDate && endDate && startDate <= endDate;
   const partyValid = partyName.trim().length > 0;
-  const guestValid = guestCount > 0 && guestCount < 50;
-  const canSubmit  = datesValid && partyValid && guestValid && !submitting && !identityLoading && userId;
+  const canSubmit  = datesValid && partyValid && !submitting && !identityLoading && userId;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -83,10 +74,9 @@ export default function RequestModal({
         startDate,
         endDate,
         partyName: partyName.trim(),
-        guestCount,
-        petsAllowed,
         note: note.trim() || undefined,
         requesterId: userId!,
+        requesterEmoji: picture || undefined,
       });
       onSuccess?.();
       onClose();
@@ -144,52 +134,31 @@ export default function RequestModal({
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <Field label="Party / family name">
-            <input
-              type="text"
-              value={partyName}
-              onChange={(e) => setPartyName(e.target.value)}
-              placeholder="e.g. The Patel family"
-              className={inputCls}
-              maxLength={60}
-              required
-            />
-          </Field>
-          <Field label="Party size">
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={guestCount}
-              onChange={(e) => setGuestCount(parseInt(e.target.value, 10) || 1)}
-              className={inputCls}
+        <Field label="Party / family name">
+          <input
+            type="text"
+            value={partyName}
+            onChange={(e) => setPartyName(e.target.value)}
+            placeholder="e.g. The Patel family"
+            className={inputCls}
+            maxLength={60}
+            required
+          />
+        </Field>
+
+        <div className="mt-3">
+          <Field label="Note for the admin (optional)">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Anything the admin should know"
+              rows={3}
+              maxLength={500}
+              className={inputCls + " resize-y"}
             />
           </Field>
         </div>
 
-        <Field label="Note for the admin (optional)">
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Anything the admin should know"
-            rows={3}
-            maxLength={500}
-            className={inputCls + " resize-y"}
-          />
-        </Field>
-
-        <label className="flex items-center gap-2 mt-3 text-sm text-ink/80">
-          <input
-            type="checkbox"
-            checked={petsAllowed}
-            onChange={(e) => setPetsAllowed(e.target.checked)}
-            className="w-4 h-4 accent-mid"
-          />
-          Bringing a pet
-        </label>
-
-        {/* Conflict & error banners */}
         {conflict && !error && (
           <div className="mt-4 rounded-xl border border-sunset-amber/40 bg-sand-light px-3 py-2 text-sm text-driftwood">
             <strong>Heads up —</strong> these dates overlap an approved reservation

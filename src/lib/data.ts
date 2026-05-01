@@ -50,20 +50,24 @@ export function useRequests() {
 /* -------------------------------------------------------------------------- */
 
 export interface NewRequestInput {
-  startDate: string;     // ISO date YYYY-MM-DD
-  endDate: string;       // ISO date
+  startDate: string;       // ISO date YYYY-MM-DD
+  endDate: string;         // ISO date
   partyName: string;
-  guestCount: number;
-  petsAllowed: boolean;
   note?: string;
-  requesterId: string;   // current user sub
+  requesterId: string;     // current user sub
+  /** Snapshot of the requester's chosen profile emoji. */
+  requesterEmoji?: string;
 }
 
 /** Create a Pending request for the signed-in user. */
 export async function createRequest(input: NewRequestInput) {
   const { errors, data } = await client.models.Request.create({
-    ...input,
-    note: input.note ?? null,
+    startDate:      input.startDate,
+    endDate:        input.endDate,
+    partyName:      input.partyName,
+    note:           input.note ?? null,
+    requesterId:    input.requesterId,
+    requesterEmoji: input.requesterEmoji ?? null,
     status: "Pending",
   });
   if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
@@ -164,8 +168,7 @@ export async function approveRequest(
     startDate:    request.startDate,
     endDate:      request.endDate,
     partyName:    request.partyName ?? "Reserved",
-    guestCount:   request.guestCount ?? 1,
-    petsAllowed:  request.petsAllowed ?? false,
+    partyEmoji:   request.requesterEmoji ?? null,
     notes:        request.note ?? null,
     createdById:  decidedById,
     sourceRequestId: request.id,
