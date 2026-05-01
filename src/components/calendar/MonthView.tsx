@@ -56,10 +56,6 @@ export default function MonthView({
                    dayISO >= r.startDate && dayISO <= r.endDate
           );
 
-          // The "start day" of the span is where we render the label.
-          const reservationIsStart = reservation && dayISO === reservation.startDate;
-          const pendingIsStart     = pending     && dayISO === pending.startDate;
-
           // Cell background + text colors per state.
           let cellBg = "bg-white border-deep/10";
           let dayNumColor = inMonth ? "text-deep" : "text-driftwood/60";
@@ -120,20 +116,23 @@ export default function MonthView({
                 )}
               </div>
 
-              {/* Body: party label only on the start day of a span */}
+              {/* Body: party label on every day of a span so multi-day stays
+                  are identifiable at a glance without clicking. */}
               <div className="flex-1 flex items-center justify-center text-center px-1">
-                {reservationIsStart && (
+                {reservation && (
                   <ReservationLabel
                     name={reservation.partyName ?? "Reserved"}
                     emoji={reservation.partyEmoji ?? ""}
                     tone="approved"
+                    note={reservation.notes ?? undefined}
                   />
                 )}
-                {pendingIsStart && (
+                {pending && (
                   <ReservationLabel
                     name={pending.partyName ?? "Pending"}
                     emoji={pending.requesterEmoji ?? ""}
                     tone="pending"
+                    note={pending.note ?? undefined}
                   />
                 )}
               </div>
@@ -146,15 +145,18 @@ export default function MonthView({
 }
 
 function ReservationLabel({
-  name, emoji, tone,
-}: { name: string; emoji: string; tone: "approved" | "pending" }) {
+  name, emoji, tone, note,
+}: { name: string; emoji: string; tone: "approved" | "pending"; note?: string }) {
   const text = tone === "approved" ? "text-white" : "text-driftwood";
+  // Hover/long-press tooltip surfaces the description without needing a click.
+  const tooltip = note ? `${name}\n${note}` : name;
   return (
-    <div className={`flex flex-col items-center gap-0.5 leading-tight ${text}`}>
+    <div
+      className={`flex flex-col items-center gap-0.5 leading-tight ${text}`}
+      title={tooltip}
+    >
       {emoji && <span className="text-2xl leading-none" aria-hidden>{emoji}</span>}
-      <span className="text-[11px] font-bold truncate max-w-[100px]" title={name}>
-        {name}
-      </span>
+      <span className="text-[11px] font-bold truncate max-w-[100px]">{name}</span>
       {tone === "pending" && (
         <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">Pending</span>
       )}
