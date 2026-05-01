@@ -84,31 +84,36 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
 // with "not authorized to perform s3:PutObject" until we extend each group
 // role with the same storage permissions.
 //
-// We scope writes/deletes to the user's own profile-pictures/{identityId}/
-// folder using the IAM policy variable ${cognito-identity.amazonaws.com:sub}.
-// Reads are allowed against profile-pictures/* so other family members can
-// see avatars.
+// IMPORTANT: do NOT reference `backend.storage.resources.bucket.bucketArn`
+// here. The group roles live in the auth stack; referencing the storage
+// stack's resolved ARN creates an `auth → storage` dependency. The storage
+// stack already depends on auth (it uses identityId). That round trip is a
+// circular dependency CloudFormation refuses to deploy.
+//
+// Instead we build a literal ARN string with wildcards. We restrict the
+// bucket name to the `amplify-*` prefix (only Amplify-created buckets in
+// this account), and scope writes to the user's own folder via the IAM
+// policy variable ${cognito-identity.amazonaws.com:sub}.
 
-const storageBucket = backend.storage.resources.bucket;
-const ownPathArn   = storageBucket.arnForObjects(
-  "profile-pictures/${cognito-identity.amazonaws.com:sub}/*"
-);
-const allPathArn   = storageBucket.arnForObjects("profile-pictures/*");
+const identityVar = "${cognito-identity.amazonaws.com:sub}"; // IAM policy variable, NOT JS interpolation
+const amplifyBucketPrefix = `arn:${Aws.PARTITION}:s3:::amplify-*`;
+const ownObjectsArn  = `${amplifyBucketPrefix}/profile-pictures/${identityVar}/*`;
+const anyProfilePicArn = `${amplifyBucketPrefix}/profile-pictures/*`;
 
 const ownerWritePolicy = new PolicyStatement({
   effect: Effect.ALLOW,
   actions: ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
-  resources: [ownPathArn],
+  resources: [ownObjectsArn],
 });
 const everyoneReadPolicy = new PolicyStatement({
   effect: Effect.ALLOW,
   actions: ["s3:GetObject"],
-  resources: [allPathArn],
+  resources: [anyProfilePicArn],
 });
 const listProfilesPolicy = new PolicyStatement({
   effect: Effect.ALLOW,
   actions: ["s3:ListBucket"],
-  resources: [storageBucket.bucketArn],
+  resources: [amplifyBucketPrefix],
   conditions: {
     StringLike: {
       "s3:prefix": ["profile-pictures/", "profile-pictures/*"],
