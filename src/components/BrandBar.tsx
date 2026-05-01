@@ -3,6 +3,7 @@ import { Link, NavLink } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
 import { Role, roleLabel } from "../lib/auth";
 import { useIdentity } from "../lib/identity";
+import { useRequests } from "../lib/data";
 import Avatar from "./Avatar";
 
 interface Props {
@@ -16,9 +17,13 @@ interface Props {
  */
 export default function BrandBar({ role }: Props) {
   const { picture, label, email } = useIdentity();
+  const { items: requests } = useRequests();
   const isAdmin = role === "Admin" || role === "SuperUser";
   const isSuper = role === "SuperUser";
   const initials = (label || email || "?").slice(0, 2).toUpperCase();
+  const pendingCount = isAdmin
+    ? requests.filter((r) => r.status === "Pending").length
+    : 0;
 
   return (
     <header
@@ -47,7 +52,21 @@ export default function BrandBar({ role }: Props) {
         <nav className="hidden md:flex items-center gap-1 text-sm">
           <NavItem to="/calendar">Calendar</NavItem>
           <NavItem to="/my-requests">My requests</NavItem>
-          {isAdmin && <NavItem to="/queue">Queue</NavItem>}
+          {isAdmin && (
+            <NavItem to="/queue">
+              <span className="relative inline-flex items-center pr-1">
+                Queue
+                {pendingCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-sunset-coral text-white text-[10px] font-bold flex items-center justify-center shadow-soft border border-white/40"
+                    aria-label={`${pendingCount} pending`}
+                  >
+                    {pendingCount > 9 ? "9+" : pendingCount}
+                  </span>
+                )}
+              </span>
+            </NavItem>
+          )}
           {isSuper && <NavItem to="/users">Users</NavItem>}
         </nav>
 

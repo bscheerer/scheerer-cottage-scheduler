@@ -1,5 +1,6 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 import { manageUsers } from "../functions/manage-users/resource";
+import { sendEmails } from "../functions/send-emails/resource";
 
 /**
  * GraphQL data model for the Scheerer Cottage Scheduler.
@@ -74,6 +75,10 @@ const schema = a.schema({
       partyName: a.string().required(),
       // Emoji snapshot from the requester's profile, captured at request time.
       requesterEmoji: a.string(),
+      // Email/name snapshots so approve/deny can send notifications without
+      // a Cognito lookup. Email is immutable in our pool, so these are stable.
+      requesterEmail: a.string(),
+      requesterName:  a.string(),
       guestCount: a.integer().default(1),
       petsAllowed: a.boolean().default(false),
       note: a.string(),
@@ -181,6 +186,38 @@ const schema = a.schema({
     .returns(a.boolean())
     .authorization((allow) => [allow.group("SuperUser")])
     .handler(a.handler.function(manageUsers)),
+
+  // ---------------------------------------- Email-notification mutations
+  // Fire-and-forget; failures don't roll back the action that triggered them.
+
+  notifyRequestCreated: a
+    .mutation()
+    .arguments({
+      requesterEmail: a.string().required(),
+      requesterName:  a.string().required(),
+      startDate:      a.string().required(),
+      endDate:        a.string().required(),
+      partyName:      a.string().required(),
+      note:           a.string(),
+    })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(sendEmails)),
+
+  notifyRequestDecided: a
+    .mutation()
+    .arguments({
+      requesterEmail: a.string().required(),
+      requesterName:  a.string().required(),
+      startDate:      a.string().required(),
+      endDate:        a.string().required(),
+      partyName:      a.string().required(),
+      status:         a.string().required(),  // "Approved" | "Denied"
+      reason:         a.string(),
+    })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.groups(["Admin", "SuperUser"])])
+    .handler(a.handler.function(sendEmails)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

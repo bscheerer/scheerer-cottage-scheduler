@@ -5,6 +5,7 @@ import { auth } from "./auth/resource";
 import { postConfirmation } from "./auth/post-confirmation/resource";
 import { data } from "./data/resource";
 import { manageUsers } from "./functions/manage-users/resource";
+import { sendEmails } from "./functions/send-emails/resource";
 import { storage } from "./storage/resource";
 
 /**
@@ -26,6 +27,7 @@ export const backend = defineBackend({
   data,
   manageUsers,
   postConfirmation,
+  sendEmails,
   storage,
 });
 
@@ -72,6 +74,42 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
     effect: Effect.ALLOW,
     actions: ["cognito-idp:AdminAddUserToGroup"],
     resources: [userPoolWildcardArn],
+  })
+);
+
+// --- send-emails Lambda: env + IAM ------------------------------------------
+//
+// FROM_EMAIL must be a verified SES identity (a single email address or a
+// verified domain). After deploy, set this on the Lambda — see PHASE9.md.
+// APP_URL provides hyperlinks back into the calendar; if blank, emails just
+// omit the links.
+
+backend.sendEmails.addEnvironment("USER_POOL_ID", userPoolId);
+backend.sendEmails.addEnvironment(
+  "FROM_EMAIL",
+  process.env.COTTAGE_FROM_EMAIL ?? ""
+);
+backend.sendEmails.addEnvironment(
+  "APP_URL",
+  process.env.COTTAGE_APP_URL ?? ""
+);
+
+// IAM: list users in groups (to find admin emails) and send via SES.
+backend.sendEmails.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ["cognito-idp:ListUsersInGroup"],
+    resources: [userPoolArn],
+  })
+);
+backend.sendEmails.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ["ses:SendEmail", "ses:SendRawEmail"],
+    // Wildcard scoping: limited to identities in this account / region.
+    resources: [
+      `arn:${Aws.PARTITION}:ses:${Aws.REGION}:${Aws.ACCOUNT_ID}:identity/*`,
+    ],
   })
 );
 

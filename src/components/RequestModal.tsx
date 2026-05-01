@@ -30,7 +30,7 @@ export default function RequestModal({
   title, reservations, onSuccess,
 }: Props) {
   const today = toISODate(new Date());
-  const { userId, label, picture, loading: identityLoading } = useIdentity();
+  const { userId, label, picture, email, loading: identityLoading } = useIdentity();
 
   const [startDate, setStartDate] = useState(initialStart ?? today);
   const [endDate, setEndDate]     = useState(initialEnd ?? today);
@@ -85,6 +85,8 @@ export default function RequestModal({
         note: note.trim() || undefined,
         requesterId: userId!,
         requesterEmoji: picture || undefined,
+        requesterEmail: email || undefined,
+        requesterName:  label || undefined,
       });
       onSuccess?.();
       onClose();

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { client } from "./client";
 import { writeAudit } from "./audit";
+import { notifyRequestCreatedAsync, notifyRequestDecidedAsync } from "./notifications";
 import type { Schema } from "../../amplify/data/resource";
 
 export type Reservation = Schema["Reservation"]["type"];
@@ -57,6 +58,9 @@ export interface NewRequestInput {
   requesterId: string;     // current user sub
   /** Snapshot of the requester's chosen profile emoji. */
   requesterEmoji?: string;
+  /** For email confirmation. */
+  requesterEmail?: string;
+  requesterName?: string;
 }
 
 /** Create a Pending request for the signed-in user. */
@@ -68,9 +72,24 @@ export async function createRequest(input: NewRequestInput) {
     note:           input.note ?? null,
     requesterId:    input.requesterId,
     requesterEmoji: input.requesterEmoji ?? null,
+    requesterEmail: input.requesterEmail ?? null,
+    requesterName:  input.requesterName  ?? null,
     status: "Pending",
   });
   if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+
+  // Fire emails (requester confirmation + admin queue alert).
+  if (input.requesterEmail) {
+    notifyRequestCreatedAsync({
+      requesterEmail: input.requesterEmail,
+      requesterName:  input.requesterName ?? input.partyName,
+      startDate:      input.startDate,
+      endDate:        input.endDate,
+      partyName:      input.partyName,
+      note:           input.note,
+    });
+  }
+
   return data;
 }
 
@@ -174,13 +193,17 @@ export async function cancelRequest(requestId: string, actorId: string, actorLab
   });
 }
 
-/** Deny a request with optional reason. Admin/SuperUser only (enforced by @auth). */
+/**
+ * Deny a request with optional reason. Admin/SuperUser only (enforced by @auth).
+ * Reads requesterEmail off the Request snapshot and emails the requester.
+ */
 export async function denyRequest(
   request: Request,
   decidedById: string,
   decidedByLabel?: string,
   reason?: string
 ) {
+  const requesterEmail = request.requesterEmail ?? undefined;
   const { errors } = await client.models.Request.update({
     id: request.id,
     status: "Denied",
@@ -197,6 +220,18 @@ export async function denyRequest(
     targetId:   request.id,
     summary:    `Denied ${request.partyName ?? "request"} for ${request.startDate} → ${request.endDate}${reason ? ` (${reason})` : ""}`,
   });
+
+  if (requesterEmail) {
+    notifyRequestDecidedAsync({
+      requesterEmail,
+      requesterName: request.requesterName ?? request.partyName ?? "Family member",
+      startDate:     request.startDate ?? "",
+      endDate:       request.endDate ?? "",
+      partyName:     request.partyName ?? "",
+      status:        "Denied",
+      reason,
+    });
+  }
 }
 
 /** True if [aStart,aEnd] overlaps [bStart,bEnd] inclusively (ISO date strings). */
@@ -227,6 +262,7 @@ export async function approveRequest(
   decidedById: string,
   decidedByLabel?: string
 ): Promise<ApproveResult> {
+  const requesterEmail = request.requesterEmail ?? undefined;
   if (!request.startDate || !request.endDate) {
     throw new Error("Request is missing startDate or endDate.");
   }
@@ -305,6 +341,18 @@ export async function approveRequest(
       `Approved ${request.partyName ?? "request"} for ${request.startDate} → ${request.endDate}` +
       (autoDeniedIds.length ? ` · auto-denied ${autoDeniedIds.length} overlap(s)` : ""),
   });
+
+  // Email the requester
+  if (requesterEmail) {
+    notifyRequestDecidedAsync({
+      requesterEmail,
+      requesterName: request.requesterName ?? request.partyName ?? "Family member",
+      startDate:     request.startDate,
+      endDate:       request.endDate,
+      partyName:     request.partyName ?? "",
+      status:        "Approved",
+    });
+  }
 
   return { reservationId: reservation.id, autoDeniedRequestIds: autoDeniedIds };
 }
