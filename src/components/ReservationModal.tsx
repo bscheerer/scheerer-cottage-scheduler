@@ -145,11 +145,11 @@ export default function ReservationModal({
         {/* View mode */}
         {!editing && (
           <>
-            <DetailRow label="Notes">
+            <DetailRow label="Description">
               {reservation.notes ? (
                 <p className="text-ink whitespace-pre-wrap">{reservation.notes}</p>
               ) : (
-                <p className="text-muted italic">No notes.</p>
+                <p className="text-muted italic">No description.</p>
               )}
             </DetailRow>
 
@@ -252,13 +252,14 @@ export default function ReservationModal({
               </Field>
             </div>
             <div className="mt-3">
-              <Field label="Notes">
+              <Field label="Description">
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
                   maxLength={500}
                   className={inputCls + " resize-y"}
+                  placeholder="Visible to the whole family"
                 />
               </Field>
             </div>

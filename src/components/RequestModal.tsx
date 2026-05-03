@@ -157,11 +157,11 @@ export default function RequestModal({
         </Field>
 
         <div className="mt-3">
-          <Field label="Note for the admin (optional)">
+          <Field label="Description (optional)">
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Anything the admin should know"
+              placeholder="A short description of the trip — who's coming, what's planned. Visible to the whole family."
               rows={3}
               maxLength={500}
               className={inputCls + " resize-y"}
