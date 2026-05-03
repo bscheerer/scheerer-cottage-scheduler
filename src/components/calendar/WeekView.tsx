@@ -1,5 +1,6 @@
 import { format, isToday, toISODate, weekDays } from "../../lib/dates";
 import type { Reservation, Request } from "../../lib/data";
+import Avatar from "../Avatar";
 
 interface Props {
   cursor: Date;
@@ -120,9 +121,17 @@ function CellLabel({
   name, emoji, tone,
 }: { name: string; emoji: string; tone: "approved" | "pending" }) {
   const text = tone === "approved" ? "text-white" : "text-driftwood";
+  const initials = (name || "?").slice(0, 2).toUpperCase();
   return (
     <div className={`flex flex-col items-center gap-1 ${text}`}>
-      {emoji && <span className="text-4xl leading-none" aria-hidden>{emoji}</span>}
+      {emoji && (
+        <Avatar
+          picture={emoji}
+          fallbackInitials={initials}
+          size={48}
+          className="border border-white/30"
+        />
+      )}
       <span className="text-sm font-bold text-center px-1" title={name}>
         {name}
       </span>

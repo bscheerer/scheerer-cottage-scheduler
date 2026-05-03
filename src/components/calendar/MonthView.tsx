@@ -1,5 +1,6 @@
 import { format, isSameMonth, isToday, monthGridDays, toISODate } from "../../lib/dates";
 import type { Reservation, Request } from "../../lib/data";
+import Avatar from "../Avatar";
 
 interface Props {
   cursor: Date;
@@ -150,12 +151,20 @@ function ReservationLabel({
   const text = tone === "approved" ? "text-white" : "text-driftwood";
   // Hover/long-press tooltip surfaces the description without needing a click.
   const tooltip = note ? `${name}\n${note}` : name;
+  const initials = (name || "?").slice(0, 2).toUpperCase();
   return (
     <div
       className={`flex flex-col items-center gap-0.5 leading-tight ${text}`}
       title={tooltip}
     >
-      {emoji && <span className="text-2xl leading-none" aria-hidden>{emoji}</span>}
+      {emoji && (
+        <Avatar
+          picture={emoji}
+          fallbackInitials={initials}
+          size={28}
+          className="border border-white/30"
+        />
+      )}
       <span className="text-[11px] font-bold truncate max-w-[100px]">{name}</span>
       {tone === "pending" && (
         <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">Pending</span>
