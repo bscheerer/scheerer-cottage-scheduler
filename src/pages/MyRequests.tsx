@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useReservations, useRequests, cancelRequest, type Request } from "../lib/data";
 import { useIdentity } from "../lib/identity";
 import RequestModal from "../components/RequestModal";
+import Avatar from "../components/Avatar";
 
 const STATUS_BADGE: Record<string, string> = {
   Pending:   "bg-[#FCEACB] text-[#8a5a17]",
@@ -80,26 +81,30 @@ export default function MyRequests() {
           <ul className="divide-y divide-deep/5">
             {mine.map((r) => (
               <li key={r.id} className="px-5 py-4 flex flex-wrap items-center gap-4">
-                <div className="flex-1 min-w-[220px]">
-                  <div className="flex items-center gap-2">
-                    {r.requesterEmoji && (
-                      <span className="text-lg leading-none" aria-hidden>{r.requesterEmoji}</span>
+                <div className="flex-1 min-w-[220px] flex items-start gap-3">
+                  <Avatar
+                    picture={r.requesterEmoji}
+                    fallbackInitials={(r.partyName || r.requesterName || "?").slice(0, 2).toUpperCase()}
+                    size={36}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-deep">{r.partyName ?? "Request"}</span>
+                      <span className={[
+                        "text-[11px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase",
+                        STATUS_BADGE[r.status ?? "Pending"] ?? "",
+                      ].join(" ")}>
+                        {r.status}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted mt-1">
+                      {r.startDate} → {r.endDate}
+                    </div>
+                    {r.note && <div className="text-sm text-ink/70 mt-1 italic">"{r.note}"</div>}
+                    {r.status === "Denied" && r.decisionReason && (
+                      <div className="text-xs text-denied mt-1">Reason: {r.decisionReason}</div>
                     )}
-                    <span className="font-semibold text-deep">{r.partyName ?? "Request"}</span>
-                    <span className={[
-                      "text-[11px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase",
-                      STATUS_BADGE[r.status ?? "Pending"] ?? "",
-                    ].join(" ")}>
-                      {r.status}
-                    </span>
                   </div>
-                  <div className="text-sm text-muted mt-1">
-                    {r.startDate} → {r.endDate}
-                  </div>
-                  {r.note && <div className="text-sm text-ink/70 mt-1 italic">"{r.note}"</div>}
-                  {r.status === "Denied" && r.decisionReason && (
-                    <div className="text-xs text-denied mt-1">Reason: {r.decisionReason}</div>
-                  )}
                 </div>
                 {r.status === "Pending" && (
                   <button

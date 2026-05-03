@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRequests, approveRequest, denyRequest, type Request } from "../lib/data";
 import { useIdentity } from "../lib/identity";
+import Avatar from "../components/Avatar";
 
 const STATUS_BADGE: Record<string, string> = {
   Pending:   "bg-[#FCEACB] text-[#8a5a17]",
@@ -111,17 +112,19 @@ export default function ApprovalQueue() {
           <ul className="divide-y divide-deep/5">
             {pending.map((r) => (
               <li key={r.id} className="px-5 py-4 flex flex-wrap items-center gap-4">
-                <div className="flex-1 min-w-[260px]">
-                  <div className="flex items-center gap-2">
-                    {r.requesterEmoji && (
-                      <span className="text-xl leading-none" aria-hidden>{r.requesterEmoji}</span>
-                    )}
+                <div className="flex-1 min-w-[260px] flex items-start gap-3">
+                  <Avatar
+                    picture={r.requesterEmoji}
+                    fallbackInitials={(r.partyName || r.requesterName || "?").slice(0, 2).toUpperCase()}
+                    size={36}
+                  />
+                  <div className="min-w-0">
                     <div className="font-semibold text-deep">{r.partyName ?? "Request"}</div>
+                    <div className="text-sm text-muted mt-0.5">
+                      {r.startDate} → {r.endDate}
+                    </div>
+                    {r.note && <div className="text-sm text-ink/70 mt-1 italic">"{r.note}"</div>}
                   </div>
-                  <div className="text-sm text-muted mt-1">
-                    {r.startDate} → {r.endDate}
-                  </div>
-                  {r.note && <div className="text-sm text-ink/70 mt-1 italic">"{r.note}"</div>}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -155,22 +158,26 @@ export default function ApprovalQueue() {
           <ul className="divide-y divide-deep/5">
             {recent.map((r) => (
               <li key={r.id} className="px-5 py-3 flex flex-wrap items-center gap-3">
-                <div className="flex-1 min-w-[220px]">
-                  <div className="flex items-center gap-2">
-                    {r.requesterEmoji && (
-                      <span className="text-base leading-none" aria-hidden>{r.requesterEmoji}</span>
-                    )}
-                    <span className="font-semibold text-deep">{r.partyName ?? "Request"}</span>
-                    <span className={[
-                      "text-[11px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase",
-                      STATUS_BADGE[r.status ?? "Pending"] ?? "",
-                    ].join(" ")}>
-                      {r.status}
-                    </span>
-                  </div>
-                  <div className="text-sm text-muted mt-0.5">
-                    {r.startDate} → {r.endDate}
-                    {r.decisionReason && <span className="italic"> · {r.decisionReason}</span>}
+                <div className="flex-1 min-w-[220px] flex items-start gap-3">
+                  <Avatar
+                    picture={r.requesterEmoji}
+                    fallbackInitials={(r.partyName || r.requesterName || "?").slice(0, 2).toUpperCase()}
+                    size={28}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-deep">{r.partyName ?? "Request"}</span>
+                      <span className={[
+                        "text-[11px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase",
+                        STATUS_BADGE[r.status ?? "Pending"] ?? "",
+                      ].join(" ")}>
+                        {r.status}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted mt-0.5">
+                      {r.startDate} → {r.endDate}
+                      {r.decisionReason && <span className="italic"> · {r.decisionReason}</span>}
+                    </div>
                   </div>
                 </div>
               </li>
