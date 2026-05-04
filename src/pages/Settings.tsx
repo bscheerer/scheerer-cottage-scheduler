@@ -15,10 +15,19 @@ import Avatar from "../components/Avatar";
  *   - Upload your own image (stored in S3, referenced via "upload:" prefix
  *     in the Cognito `picture` attribute)
  */
+function splitName(full: string | null | undefined): { first: string; last: string } {
+  const parts = (full ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: "", last: "" };
+  if (parts.length === 1) return { first: parts[0], last: "" };
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+}
+
 export default function Settings() {
   const { email, preferredUsername, picture, phoneNumber, label, refetch, loading } = useIdentity();
 
-  const [displayName, setDisplayName]     = useState(preferredUsername ?? "");
+  const initialName = splitName(preferredUsername);
+  const [firstName, setFirstName]         = useState(initialName.first);
+  const [lastName, setLastName]           = useState(initialName.last);
   const [chosenPicture, setChosenPicture] = useState<string>(picture ?? "");
   const [phoneInput, setPhoneInput]       = useState(formatPhoneForDisplay(phoneNumber));
   const [pendingFile, setPendingFile]     = useState<File | null>(null);
@@ -31,7 +40,9 @@ export default function Settings() {
 
   useEffect(() => {
     if (!loading) {
-      setDisplayName(preferredUsername ?? "");
+      const n = splitName(preferredUsername);
+      setFirstName(n.first);
+      setLastName(n.last);
       setChosenPicture(picture ?? "");
       setPhoneInput(formatPhoneForDisplay(phoneNumber));
     }
@@ -48,8 +59,13 @@ export default function Settings() {
   const normalizedPhone = normalizePhone(phoneInput);
   const phoneInvalid = phoneInput.trim().length > 0 && normalizedPhone === null;
 
+  const trimmedFirst = firstName.trim();
+  const trimmedLast  = lastName.trim();
+  const fullName     = [trimmedFirst, trimmedLast].filter(Boolean).join(" ");
+  const nameInvalid  = trimmedFirst.length === 0 || trimmedLast.length === 0;
+
   const dirty =
-    displayName !== (preferredUsername ?? "") ||
+    fullName !== (preferredUsername ?? "") ||
     chosenPicture !== (picture ?? "") ||
     pendingFile !== null ||
     (normalizedPhone !== null && normalizedPhone !== (phoneNumber ?? ""));
@@ -78,7 +94,7 @@ export default function Settings() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    if (!dirty || saving || phoneInvalid) return;
+    if (!dirty || saving || phoneInvalid || nameInvalid) return;
 
     setSaving(true);
     setError(null);
@@ -98,7 +114,7 @@ export default function Settings() {
       }
 
       await updateProfile({
-        preferredUsername: displayName.trim(),
+        preferredUsername: fullName,
         picture: pictureToSave,
         phoneNumber: normalizedPhone ?? undefined,
       });
@@ -113,7 +129,9 @@ export default function Settings() {
     }
   }
 
-  const initials = (preferredUsername || email || "?").slice(0, 2).toUpperCase();
+  const initials = (
+    (trimmedFirst[0] || "") + (trimmedLast[0] || "")
+  ).toUpperCase() || (preferredUsername || email || "?").slice(0, 2).toUpperCase();
   const previewPicture =
     pendingPreviewUrl ? null /* show pendingPreviewUrl directly below */ : chosenPicture;
 
@@ -145,7 +163,7 @@ export default function Settings() {
           )}
           <div>
             <div className="font-display text-lg text-deep">
-              {displayName.trim() || label || "Family member"}
+              {fullName || label || "Family member"}
             </div>
             <div className="text-sm text-muted">{email}</div>
           </div>
@@ -166,18 +184,36 @@ export default function Settings() {
           </p>
         </Field>
 
-        {/* Display name */}
-        <Field label="Display name">
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Aunt Karen"
-            maxLength={60}
-            className={inputCls}
-          />
+        {/* Name (split into first + last) */}
+        <Field label="Name">
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="First"
+              maxLength={30}
+              className={[inputCls, !trimmedFirst ? "border-denied/30" : ""].join(" ")}
+              required
+              aria-label="First name"
+              autoComplete="given-name"
+            />
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Last"
+              maxLength={30}
+              className={[inputCls, !trimmedLast ? "border-denied/30" : ""].join(" ")}
+              required
+              aria-label="Last name"
+              autoComplete="family-name"
+            />
+          </div>
           <p className="text-xs text-muted mt-1">
-            Shown on requests, the approval queue, and the Users & Roles page.
+            {nameInvalid
+              ? "Both first and last name are required."
+              : "Shown on requests, the approval queue, and the Users & Roles page."}
           </p>
         </Field>
 
@@ -302,7 +338,7 @@ export default function Settings() {
         <div className="flex justify-end gap-2">
           <button
             type="submit"
-            disabled={!dirty || saving || phoneInvalid}
+            disabled={!dirty || saving || phoneInvalid || nameInvalid}
             className="text-white text-sm font-semibold px-5 py-2 rounded-xl shadow-soft transition disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "linear-gradient(180deg, #2C7DA0, #1B4965)" }}
           >

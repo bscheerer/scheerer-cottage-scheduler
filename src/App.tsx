@@ -21,6 +21,29 @@ export default function App() {
   return (
     <Authenticator
       signUpAttributes={["email", "preferred_username"]}
+      formFields={{
+        signUp: {
+          preferred_username: {
+            label: "Name",
+            placeholder: "First and last name (e.g. Aunt Karen)",
+            isRequired: true,
+            order: 1,
+          },
+        },
+      }}
+      services={{
+        async validateCustomSignUp(formData) {
+          const raw = (formData.preferred_username as string | undefined) ?? "";
+          const parts = raw.trim().split(/\s+/).filter(Boolean);
+          if (parts.length < 2) {
+            return {
+              preferred_username:
+                "Please enter both your first and last name (e.g. Karen Patel).",
+            };
+          }
+          return undefined;
+        },
+      }}
       components={{
         Header() {
           return (
