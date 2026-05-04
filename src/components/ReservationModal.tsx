@@ -155,12 +155,20 @@ export default function ReservationModal({
 
             {sourceRequest && (
               <DetailRow label="Originally requested by">
-                <p className="text-ink">
-                  {sourceRequest.requesterEmoji && (
-                    <span className="mr-1.5" aria-hidden>{sourceRequest.requesterEmoji}</span>
-                  )}
-                  {sourceRequest.partyName ?? "—"}
-                </p>
+                <div className="flex items-center gap-2.5">
+                  <Avatar
+                    picture={sourceRequest.requesterEmoji}
+                    fallbackInitials={(
+                      sourceRequest.requesterName ||
+                      sourceRequest.partyName ||
+                      "?"
+                    ).slice(0, 2).toUpperCase()}
+                    size={32}
+                  />
+                  <span className="text-ink font-medium">
+                    {sourceRequest.requesterName ?? sourceRequest.partyName ?? "—"}
+                  </span>
+                </div>
               </DetailRow>
             )}
 
