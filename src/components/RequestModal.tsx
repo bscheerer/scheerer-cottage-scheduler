@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "rea
 import { createRequest, overlaps, type Reservation } from "../lib/data";
 import { useIdentity } from "../lib/identity";
 import { toISODate } from "../lib/dates";
+import { COTTAGE_ELDERS } from "../lib/cottage";
 
 interface Props {
   open: boolean;
@@ -36,6 +37,7 @@ export default function RequestModal({
   const [endDate, setEndDate]     = useState(initialEnd ?? today);
   const [partyName, setPartyName] = useState(initialPartyName ?? label ?? "");
   const [note, setNote]           = useState(initialNote ?? "");
+  const [sponsors, setSponsors]   = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
@@ -47,6 +49,7 @@ export default function RequestModal({
     if (open) {
       setError(null);
       setSubmitting(false);
+      setSponsors([]);
       if (initialStart)     setStartDate(initialStart);
       if (initialEnd)       setEndDate(initialEnd);
       if (initialPartyName) setPartyName(initialPartyName);
@@ -68,9 +71,17 @@ export default function RequestModal({
     (r) => r.startDate && r.endDate && overlaps(startDate, endDate, r.startDate, r.endDate)
   );
 
-  const datesValid = startDate && endDate && startDate <= endDate;
-  const partyValid = partyName.trim().length > 0;
-  const canSubmit  = datesValid && partyValid && !submitting && !identityLoading && userId;
+  const datesValid    = startDate && endDate && startDate <= endDate;
+  const partyValid    = partyName.trim().length > 0;
+  const sponsorsValid = sponsors.length > 0;
+  const canSubmit     = datesValid && partyValid && sponsorsValid &&
+                        !submitting && !identityLoading && userId;
+
+  function toggleSponsor(name: string) {
+    setSponsors((cur) =>
+      cur.includes(name) ? cur.filter((s) => s !== name) : [...cur, name]
+    );
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -87,6 +98,7 @@ export default function RequestModal({
         requesterEmoji: picture || undefined,
         requesterEmail: email || undefined,
         requesterName:  label || undefined,
+        sponsors,
       });
       onSuccess?.();
       onClose();
@@ -155,6 +167,41 @@ export default function RequestModal({
             required
           />
         </Field>
+
+        <div className="mt-3">
+          <Field label="Cottage Elder Sponsor">
+            <div className="space-y-1.5 rounded-lg border border-deep/15 bg-offwhite p-3">
+              {COTTAGE_ELDERS.map((elder) => {
+                const checked = sponsors.includes(elder);
+                return (
+                  <label
+                    key={elder}
+                    className={[
+                      "flex items-center gap-2.5 cursor-pointer rounded px-2 py-1 transition",
+                      checked ? "bg-foam" : "hover:bg-foam/50",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleSponsor(elder)}
+                      className="w-4 h-4 accent-mid"
+                    />
+                    <span className="text-sm text-ink">{elder}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className={[
+              "text-xs mt-1",
+              sponsorsValid ? "text-muted" : "text-denied",
+            ].join(" ")}>
+              {sponsorsValid
+                ? `Sponsored by ${sponsors.join(", ")}.`
+                : "Pick at least one elder. You can pick more than one."}
+            </p>
+          </Field>
+        </div>
 
         <div className="mt-3">
           <Field label="Description (optional)">

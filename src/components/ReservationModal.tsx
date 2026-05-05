@@ -153,6 +153,21 @@ export default function ReservationModal({
               )}
             </DetailRow>
 
+            <DetailRow label="Cottage Elder Sponsor">
+              {reservation.sponsors && reservation.sponsors.length > 0 ? (
+                <ul className="space-y-1">
+                  {reservation.sponsors.map((s) => (
+                    <li key={s} className="flex items-center gap-2 text-ink">
+                      <span className="w-1.5 h-1.5 rounded-full bg-aqua flex-shrink-0" />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted italic">No sponsor recorded.</p>
+              )}
+            </DetailRow>
+
             {sourceRequest && (
               <DetailRow label="Originally requested by">
                 <div className="flex items-center gap-2.5">

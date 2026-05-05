@@ -61,6 +61,8 @@ export interface NewRequestInput {
   /** For email confirmation. */
   requesterEmail?: string;
   requesterName?: string;
+  /** At least one Cottage Elder Sponsor required (enforced in the form). */
+  sponsors?: string[];
 }
 
 /** Create a Pending request for the signed-in user. */
@@ -74,6 +76,7 @@ export async function createRequest(input: NewRequestInput) {
     requesterEmoji: input.requesterEmoji ?? null,
     requesterEmail: input.requesterEmail ?? null,
     requesterName:  input.requesterName  ?? null,
+    sponsors:       input.sponsors ?? [],
     status: "Pending",
   });
   if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
@@ -288,6 +291,7 @@ export async function approveRequest(
     endDate:      request.endDate,
     partyName:    request.partyName ?? "Reserved",
     partyEmoji:   request.requesterEmoji ?? null,
+    sponsors:     (request.sponsors ?? []).filter((s): s is string => Boolean(s)),
     notes:        request.note ?? null,
     createdById:  decidedById,
     sourceRequestId: request.id,

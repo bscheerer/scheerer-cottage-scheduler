@@ -54,6 +54,9 @@ const schema = a.schema({
       // Snapshot of the requester's emoji avatar at approve time. Rendered
       // on the calendar so each reservation is recognizable at a glance.
       partyEmoji: a.string(),
+      // Cottage Elder Sponsors (snapshot at approve time). At least one is
+      // required at request time; copied to Reservation when approved.
+      sponsors: a.string().array(),
       guestCount: a.integer().default(1),
       petsAllowed: a.boolean().default(false),
       notes: a.string(),
@@ -79,6 +82,8 @@ const schema = a.schema({
       // a Cognito lookup. Email is immutable in our pool, so these are stable.
       requesterEmail: a.string(),
       requesterName:  a.string(),
+      // Cottage Elder Sponsors selected at request time (at least one required).
+      sponsors: a.string().array(),
       guestCount: a.integer().default(1),
       petsAllowed: a.boolean().default(false),
       note: a.string(),
