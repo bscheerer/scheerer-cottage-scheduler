@@ -2,7 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
   type ReactNode,
 } from "react";
-import { fetchUserAttributes, getCurrentUser } from "aws-amplify/auth";
+import { fetchUserAttributes, getCurrentUser, fetchAuthSession } from "aws-amplify/auth";
 
 export interface Identity {
   /** Cognito `sub` — stable unique ID. */
@@ -50,7 +50,24 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       const user = await getCurrentUser();
       const attrs = await fetchUserAttributes();
       const preferredUsername = attrs.preferred_username ?? null;
-      const email             = attrs.email ?? user.signInDetails?.loginId ?? user.username ?? null;
+      let email =
+        attrs.email ?? user.signInDetails?.loginId ?? user.username ?? null;
+      /* ID token fallback — some pools omit `email` from fetchUserAttributes in edge cases */
+      if (!email?.includes("@")) {
+        try {
+          const sess = await fetchAuthSession();
+          const p = sess.tokens?.idToken?.payload as Record<string, unknown> | undefined;
+          const cand =
+            (typeof p?.email === "string" ? p.email : undefined) ??
+            (typeof p?.preferred_username === "string" ? p.preferred_username : undefined) ??
+            (typeof p?.username === "string" ? p.username : undefined);
+          if (typeof cand === "string" && cand.includes("@")) {
+            email = cand;
+          }
+        } catch {
+          /* noop */
+        }
+      }
       const picture           = attrs.picture ?? null;
       // Stored as a custom attribute (added to the pool out-of-band — see
       // amplify/auth/resource.ts).

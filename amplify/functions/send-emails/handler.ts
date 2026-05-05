@@ -5,65 +5,138 @@ import {
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 
 const cognito = new CognitoIdentityProviderClient({});
-const ses     = new SESClient({});
+/** Same region as the Lambda — SES identities must exist in THIS region */
+const ses = new SESClient({ region: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION });
 
 const USER_POOL_ID = process.env.USER_POOL_ID!;
-const FROM_EMAIL   = process.env.FROM_EMAIL!;
-const APP_URL      = process.env.APP_URL ?? "";
+const FROM_EMAIL = process.env.FROM_EMAIL ?? "";
+const APP_URL = process.env.APP_URL ?? "";
+
+let didLogConfig: boolean = false;
+function logRuntimeEmailConfigOnce(): void {
+  if (didLogConfig) return;
+  didLogConfig = true;
+  const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "";
+  console.log("[send-emails] runtime config", {
+    hasFromEmail: Boolean(FROM_EMAIL),
+    fromDomain: FROM_EMAIL.includes("@")
+      ? FROM_EMAIL.split("@")[1]
+      : "(invalid — need user@domain)",
+    appUrlLength: APP_URL.length,
+    sesRegion: region,
+  });
+}
+
+interface AppSyncResolverEvent<T = Record<string, unknown>> {
+  arguments: T;
+  info?: {
+    fieldName?: string;
+    selectionSetList?: unknown;
+    parentTypeName?: string;
+  };
+  identity?: Record<string, unknown>;
+  source?: unknown;
+}
 
 interface CreatedArgs {
   requesterEmail: string;
-  requesterName:  string;
-  startDate:      string;
-  endDate:        string;
-  partyName:      string;
-  note?:          string;
+  requesterName: string;
+  startDate: string;
+  endDate: string;
+  partyName: string;
+  note?: string;
 }
 
 interface DecidedArgs {
   requesterEmail: string;
-  requesterName:  string;
-  startDate:      string;
-  endDate:        string;
-  partyName:      string;
-  status:         "Approved" | "Denied" | string;
-  reason?:        string;
+  requesterName: string;
+  startDate: string;
+  endDate: string;
+  partyName: string;
+  status: "Approved" | "Denied" | string;
+  reason?: string;
+}
+
+function looksLikeEmail(s: unknown): s is string {
+  return typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+}
+
+/**
+ * Prefer AppSync's field name so routing never collides when extra keys appear
+ * on one of the argument shapes during schema evolution.
+ */
+function pickOperation(event: unknown): "created" | "decided" | null {
+  const evt = event as AppSyncResolverEvent<Record<string, unknown>>;
+  const field = evt.info?.fieldName;
+  if (field === "notifyRequestCreated") return "created";
+  if (field === "notifyRequestDecided") return "decided";
+  // Legacy fallback (older payloads / tooling without `info`).
+  const args = (evt.arguments ?? (event as Record<string, unknown>) ?? {}) as Record<
+    string,
+    unknown
+  >;
+  if (
+    typeof args.status === "string" &&
+    (args.status === "Approved" || args.status === "Denied")
+  ) {
+    return "decided";
+  }
+  if ("partyName" in args && typeof args.requesterEmail === "string") {
+    return "created";
+  }
+  return null;
 }
 
 /**
  * Single-Lambda dispatcher for two notification operations.
- * Routes by checking which arguments are present (Amplify Gen 2's
- * a.handler.function() doesn't expose info.fieldName reliably).
  */
 export const handler = async (event: unknown): Promise<boolean> => {
+  logRuntimeEmailConfigOnce();
   console.log("send-emails :: event ::", JSON.stringify(event));
   const e = event as Record<string, unknown>;
   const args = (e?.arguments ?? e ?? {}) as Record<string, unknown>;
   try {
-    if (typeof args.status === "string") {
+    const op = pickOperation(event);
+
+    if (op === "decided") {
       return await notifyDecided(args as unknown as DecidedArgs);
     }
-    return await notifyCreated(args as unknown as CreatedArgs);
+    if (op === "created") {
+      return await notifyCreated(args as unknown as CreatedArgs);
+    }
+
+    console.error(
+      "send-emails :: could not classify operation — expected notifyRequestCreated " +
+        "or notifyRequestDecided. info.fieldName:",
+      ((event as { info?: { fieldName?: string } }).info)?.fieldName,
+    );
+    return false;
   } catch (err) {
     console.error("send-emails :: failed", err);
-    // Best-effort: don't fail the GraphQL call just because email failed.
     return false;
   }
 };
-
-/* -------------------------------------------------------------------------- */
-/*  Operations                                                                 */
-/* -------------------------------------------------------------------------- */
 
 async function notifyCreated(args: CreatedArgs): Promise<boolean> {
   const dateRange = formatDateRange(args.startDate, args.endDate);
   const requesterPlain = displayLabel(args);
 
+  const requesterRecipient = looksLikeEmail(args.requesterEmail)
+    ? args.requesterEmail.trim()
+    : undefined;
+  if (!requesterRecipient) {
+    console.warn(
+      "send-emails :: notifyCreated — invalid or missing requesterEmail;",
+      JSON.stringify(args.requesterEmail),
+    );
+  }
+
   // 1. Confirmation to the requester
-  await sendEmail({
-    to: args.requesterEmail,
-    subject: `Cottage request submitted — ${dateRange}`,
-    html: `
+  if (requesterRecipient) {
+    await sendEmail({
+      to: requesterRecipient,
+      subject: `Cottage request submitted — ${dateRange}`,
+      html: `
       <p>Hi ${escapeHtml(requesterPlain)},</p>
       <p>Your request for the Scheerer cottage has been submitted:</p>
       <ul>
@@ -72,15 +145,23 @@ async function notifyCreated(args: CreatedArgs): Promise<boolean> {
         ${args.note ? `<li><strong>Note:</strong> ${escapeHtml(args.note)}</li>` : ""}
       </ul>
       <p>An admin will review and let you know.</p>
-      ${APP_URL ? `<p><a href="${APP_URL}">Open the calendar</a></p>` : ""}
+      ${APP_URL ? `<p><a href="${escapeHtmlHref(APP_URL)}">Open the calendar</a></p>` : ""}
     `,
-    text: `Your request for ${args.partyName} (${dateRange}) has been submitted. An admin will review and let you know.`,
-  });
+      text: `Your request for ${args.partyName} (${dateRange}) has been submitted. An admin will review and let you know.`,
+    });
+  }
+
+  let admins: string[] = [];
+  try {
+    admins = await getAdminEmails();
+  } catch (adminErr) {
+    console.error("send-emails :: getAdminEmails failed — admin alerts skipped:", adminErr);
+  }
 
   // 2. Notify all admins + super-users
-  const admins = await getAdminEmails();
   for (const adminEmail of admins) {
-    if (adminEmail === args.requesterEmail) continue; // don't double-mail self
+    if (!looksLikeEmail(adminEmail)) continue;
+    if (adminEmail === requesterRecipient) continue;
     await sendEmail({
       to: adminEmail,
       subject: `New cottage request — ${args.partyName} (${dateRange})`,
@@ -91,7 +172,7 @@ async function notifyCreated(args: CreatedArgs): Promise<boolean> {
           <li><strong>Party:</strong> ${escapeHtml(args.partyName)}</li>
           ${args.note ? `<li><strong>Note:</strong> ${escapeHtml(args.note)}</li>` : ""}
         </ul>
-        ${APP_URL ? `<p><a href="${APP_URL}/queue">Open the approval queue</a></p>` : ""}
+        ${APP_URL ? `<p><a href="${escapeHtmlHref(`${APP_URL}/queue`)}">Open the approval queue</a></p>` : ""}
       `,
       text: `${requesterPlain} requested the cottage for ${args.partyName} (${dateRange}). Open the approval queue to decide.`,
     });
@@ -104,8 +185,17 @@ async function notifyDecided(args: DecidedArgs): Promise<boolean> {
   const requesterPlain = displayLabel(args);
   const isApproved = args.status === "Approved";
 
+  const to = looksLikeEmail(args.requesterEmail) ? args.requesterEmail.trim() : undefined;
+  if (!to) {
+    console.warn(
+      "send-emails :: notifyDecided — invalid or missing requesterEmail;",
+      JSON.stringify(args.requesterEmail),
+    );
+    return false;
+  }
+
   await sendEmail({
-    to: args.requesterEmail,
+    to,
     subject: isApproved
       ? `Cottage request approved — ${dateRange}`
       : `Cottage request denied — ${dateRange}`,
@@ -116,12 +206,12 @@ async function notifyDecided(args: DecidedArgs): Promise<boolean> {
         <li><strong>Dates:</strong> ${escapeHtml(dateRange)}</li>
         <li><strong>Party name:</strong> ${escapeHtml(args.partyName)}</li>
       </ul>
-      ${APP_URL ? `<p><a href="${APP_URL}">See the calendar</a></p>` : ""}
+      ${APP_URL ? `<p><a href="${escapeHtmlHref(APP_URL)}">See the calendar</a></p>` : ""}
     ` : `
       <p>Hi ${escapeHtml(requesterPlain)},</p>
       <p>Your request for ${escapeHtml(dateRange)} was unfortunately denied.</p>
       ${args.reason ? `<p><strong>Reason:</strong> ${escapeHtml(args.reason)}</p>` : ""}
-      ${APP_URL ? `<p><a href="${APP_URL}">Pick different dates</a></p>` : ""}
+      ${APP_URL ? `<p><a href="${escapeHtmlHref(APP_URL)}">Pick different dates</a></p>` : ""}
     `,
     text: isApproved
       ? `Your request for ${args.partyName} (${dateRange}) has been approved.`
@@ -129,10 +219,6 @@ async function notifyDecided(args: DecidedArgs): Promise<boolean> {
   });
   return true;
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
 
 async function getAdminEmails(): Promise<string[]> {
   const out: string[] = [];
@@ -147,7 +233,7 @@ async function getAdminEmails(): Promise<string[]> {
       }));
       for (const user of res.Users ?? []) {
         const email = user.Attributes?.find((a) => a.Name === "email")?.Value;
-        if (email && !out.includes(email)) out.push(email);
+        if (email && looksLikeEmail(email) && !out.includes(email)) out.push(email);
       }
       token = res.NextToken;
     } while (token);
@@ -179,11 +265,14 @@ async function sendEmail(args: SendArgs): Promise<void> {
         },
       },
     }));
-    console.log("Sent email to", args.to, "subject:", args.subject);
+    console.log("SES ok →", args.to, "subject:", args.subject);
   } catch (err) {
-    // SES sandbox rejects unverified recipients; log and swallow so the
-    // request action still succeeds.
-    console.error("SES send failed for", args.to, err);
+    console.error(
+      "SES send failed for",
+      args.to,
+      "- check SES sandbox/recipient verification, FROM identity region, and IAM:",
+      err,
+    );
   }
 }
 
@@ -197,6 +286,7 @@ function formatDateRange(start: string, end: string): string {
   return `${start} → ${end}`;
 }
 
+/** Escapes text for HTML body */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -204,4 +294,9 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/** Escapes a URL for insertion into HTML href="..." — avoid attribute injection */
+function escapeHtmlHref(url: string): string {
+  return escapeHtml(url);
 }

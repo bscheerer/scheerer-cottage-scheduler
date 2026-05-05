@@ -4,6 +4,10 @@ backend:
     build:
       commands:
         - npm install --cache .npm --prefer-offline --no-audit --no-fund
+        # If this prints "missing", env vars are not visible to the backend build
+        # (check Amplify Hosting → Environment variables for this branch).
+        - 'if [ -n "$COTTAGE_FROM_EMAIL" ]; then echo "[backend] COTTAGE_FROM_EMAIL is set (ok)"; else echo "[backend] WARNING — COTTAGE_FROM_EMAIL is EMPTY; Lambda will not send mail"; fi'
+        - 'if [ -n "$COTTAGE_APP_URL" ]; then echo "[backend] COTTAGE_APP_URL is set (ok)"; else echo "[backend] COTTAGE_APP_URL not set (links in email optional)"; fi'
         - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
 frontend:
   phases:

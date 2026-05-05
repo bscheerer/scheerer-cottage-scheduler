@@ -85,14 +85,37 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
 // omit the links.
 
 backend.sendEmails.addEnvironment("USER_POOL_ID", userPoolId);
-backend.sendEmails.addEnvironment(
-  "FROM_EMAIL",
-  process.env.COTTAGE_FROM_EMAIL ?? ""
+
+// Sender + app URL — set in Amplify Console → Hosting → Environment variables
+// before backend deploy (`ampx pipeline-deploy` reads Node process.env during synth).
+const cottageFromEmail =
+  process.env.COTTAGE_FROM_EMAIL?.trim() ||
+  process.env.SES_FROM_EMAIL?.trim() ||
+  process.env.FROM_EMAIL?.trim() ||
+  "";
+
+/** Amplify console entries like "morben.net" — treat as https for email links */
+function normalizePublicAppUrl(raw: string): string {
+  const u = raw.trim();
+  if (!u) return "";
+  if (/^https?:\/\//i.test(u)) return u;
+  return `https://${u}`;
+}
+
+const cottageAppUrl = normalizePublicAppUrl(
+  process.env.COTTAGE_APP_URL?.trim() || process.env.APP_URL?.trim() || ""
 );
-backend.sendEmails.addEnvironment(
-  "APP_URL",
-  process.env.COTTAGE_APP_URL ?? ""
-);
+
+backend.sendEmails.addEnvironment("FROM_EMAIL", cottageFromEmail);
+backend.sendEmails.addEnvironment("APP_URL", cottageAppUrl);
+
+if (!cottageFromEmail) {
+  console.warn(
+    "[cottage-send-emails] FROM_EMAIL will be EMPTY — Lambda will skip all SES sends until you set one of:\n" +
+      "  COTTAGE_FROM_EMAIL, SES_FROM_EMAIL, or FROM_EMAIL\n" +
+      "in Amplify Hosting environment variables (same place as your build vars) then redeploy the backend.",
+  );
+}
 
 // IAM: list users in groups (to find admin emails) and send via SES.
 backend.sendEmails.resources.lambda.addToRolePolicy(

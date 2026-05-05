@@ -184,6 +184,47 @@ their own preview URLs — useful for trying changes before merging.
 
 ---
 
+## Email notifications (reservation queue)
+
+Request submit, admin queue alerts, and approve/deny confirmations are sent by
+the `send-emails` Lambda via **Amazon SES**. If this was never configured,
+**the app still works** — you just get no mail.
+
+### Required: environment variables (backend build)
+
+The sender address is wired at **deploy time**. In **Amplify Console** → your app
+→ **Hosting** → **Environment variables**, add for the **same branch** your
+backend deploy uses:
+
+| Variable | Example | Purpose |
+|---------|---------|--------|
+| `COTTAGE_FROM_EMAIL` | `noreply@your-verified-domain.com` | **Verified** SES sender (`From`). Also accepts aliases `SES_FROM_EMAIL` or `FROM_EMAIL`. |
+| `COTTAGE_APP_URL` | `https://morben.net` | Use **https://** — bare hostnames are auto-normalized now, but explicit is clearer. |
+
+Then **redeploy** (or trigger a new build) so `npx ampx pipeline-deploy`
+picks them up.
+
+### Required: SES in the Lambda region
+
+Lambdas send SES from **`AWS_REGION` for that function** — usually the region
+Amplify deployed the backend into. In **SES** (`us-east-1`, `us-east-2`, …):
+
+1. **Verify** the `COTTAGE_FROM_EMAIL` identity (single address or domain).
+2. If the account is still in the **SES sandbox**, verify **every recipient**
+   (admins + requesters), or exit sandbox / request production — otherwise SES
+   returns `MessageRejected` (see Lambda CloudWatch logs: `SES send failed`).
+
+### Debugging
+
+CloudWatch → log group for **`send-emails`**:
+
+- **`FROM_EMAIL env var not set`** → add `COTTAGE_FROM_EMAIL` in Amplify and redeploy backend.
+- **`SES send failed` + sandbox / unverified identity** → verify identities in SES.
+- **`getAdminEmails failed`** → Lambda IAM must allow `cognito-idp:ListUsersInGroup`
+  on your user pool (already in `amplify/backend.ts`).
+
+---
+
 ## Common issues
 
 | Symptom | Likely cause | Fix |
@@ -192,6 +233,7 @@ their own preview URLs — useful for trying changes before merging.
 | Can sign up but can't see anything | No Cognito group assigned | Add yourself to a group (Step 4). |
 | "Not Authorized" on data calls | Group not in JWT yet | Sign out and back in to refresh the ID token. |
 | Sandbox stuck "deploying" | First-time CDK bootstrap | `npx ampx configure profile` then retry; or run `cdk bootstrap` once. |
+| No reservation emails anywhere | Missing `COTTAGE_FROM_EMAIL` or SES sandbox | See **Email notifications (SES)** above; check `send-emails` logs. |
 
 ---
 
