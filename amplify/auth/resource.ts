@@ -2,6 +2,17 @@ import { defineAuth } from "@aws-amplify/backend";
 import { postConfirmation } from "./post-confirmation/resource";
 
 /**
+ * Same sender as the reservation `send-emails` Lambda (`COTTAGE_FROM_EMAIL` in
+ * Amplify Hosting). Must already be a verified SES identity in your backend
+ * region before Cognito can send sign-up / forgot-password mail through SES.
+ * Optional: set `COGNITO_FROM_EMAIL` to use a different verified address.
+ */
+const cognitoSesFromEmail =
+  process.env.COTTAGE_FROM_EMAIL?.trim() ||
+  process.env.COGNITO_FROM_EMAIL?.trim() ||
+  "";
+
+/**
  * Cognito user pool for the Scheerer Cottage Scheduler.
  *
  * Three groups model the role system from the design plan:
@@ -17,6 +28,16 @@ export const auth = defineAuth({
   loginWith: {
     email: true,
   },
+  ...(cognitoSesFromEmail
+    ? {
+        senders: {
+          email: {
+            fromEmail: cognitoSesFromEmail,
+            fromName: "Scheerer Cottage",
+          },
+        },
+      }
+    : {}),
   userAttributes: {
     email: { required: true, mutable: false },
     preferredUsername: { required: false, mutable: true },

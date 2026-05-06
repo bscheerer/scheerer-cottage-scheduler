@@ -26,28 +26,54 @@ interface DecidedInput {
 }
 
 export function notifyRequestCreatedAsync(input: CreatedInput): void {
-  client.mutations.notifyRequestCreated({
-    requesterEmail: input.requesterEmail,
-    requesterName:  input.requesterName,
-    startDate:      input.startDate,
-    endDate:        input.endDate,
-    partyName:      input.partyName,
-    note:           input.note ?? null,
-  }).catch((err) => {
-    console.warn("notifyRequestCreated failed (non-fatal)", err);
-  });
+  void client.mutations
+    .notifyRequestCreated({
+      requesterEmail: input.requesterEmail,
+      requesterName: input.requesterName,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      partyName: input.partyName,
+      note: input.note ?? null,
+    })
+    .then((res) => {
+      const r = res as { data?: unknown; errors?: unknown[] };
+      if (r.errors?.length) {
+        console.error("[email] notifyRequestCreated GraphQL errors", r.errors);
+      }
+      if (r.data === false) {
+        console.error(
+          "[email] notifyRequestCreated returned false — check CloudWatch for Lambda send-emails (FROM_EMAIL, SES errors, IAM, or invalid requester email)",
+        );
+      }
+    })
+    .catch((err) => {
+      console.error("[email] notifyRequestCreated failed (mutation or network)", err);
+    });
 }
 
 export function notifyRequestDecidedAsync(input: DecidedInput): void {
-  client.mutations.notifyRequestDecided({
-    requesterEmail: input.requesterEmail,
-    requesterName:  input.requesterName,
-    startDate:      input.startDate,
-    endDate:        input.endDate,
-    partyName:      input.partyName,
-    status:         input.status,
-    reason:         input.reason ?? null,
-  }).catch((err) => {
-    console.warn("notifyRequestDecided failed (non-fatal)", err);
-  });
+  void client.mutations
+    .notifyRequestDecided({
+      requesterEmail: input.requesterEmail,
+      requesterName: input.requesterName,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      partyName: input.partyName,
+      status: input.status,
+      reason: input.reason ?? null,
+    })
+    .then((res) => {
+      const r = res as { data?: unknown; errors?: unknown[] };
+      if (r.errors?.length) {
+        console.error("[email] notifyRequestDecided GraphQL errors", r.errors);
+      }
+      if (r.data === false) {
+        console.error(
+          "[email] notifyRequestDecided returned false — check CloudWatch for Lambda send-emails (FROM_EMAIL, SES, requester email)",
+        );
+      }
+    })
+    .catch((err) => {
+      console.error("[email] notifyRequestDecided failed (mutation or network)", err);
+    });
 }

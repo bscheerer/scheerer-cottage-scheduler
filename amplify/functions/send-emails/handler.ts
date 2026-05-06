@@ -4,9 +4,14 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 
-const cognito = new CognitoIdentityProviderClient({});
-/** Same region as the Lambda — SES identities must exist in THIS region */
-const ses = new SESClient({ region: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION });
+const lambdaRegion = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "";
+/** Optional override when your SES identity is in another region (rare). */
+const sesRegion = process.env.SES_REGION?.trim() || lambdaRegion;
+
+const cognito = new CognitoIdentityProviderClient({
+  region: lambdaRegion || undefined,
+});
+const ses = new SESClient({ region: sesRegion || undefined });
 
 const USER_POOL_ID = process.env.USER_POOL_ID!;
 const FROM_EMAIL = process.env.FROM_EMAIL ?? "";
@@ -23,7 +28,8 @@ function logRuntimeEmailConfigOnce(): void {
       ? FROM_EMAIL.split("@")[1]
       : "(invalid — need user@domain)",
     appUrlLength: APP_URL.length,
-    sesRegion: region,
+    lambdaRegion: region,
+    sesClientRegion: sesRegion,
   });
 }
 
@@ -66,8 +72,11 @@ function looksLikeEmail(s: unknown): s is string {
  * on one of the argument shapes during schema evolution.
  */
 function pickOperation(event: unknown): "created" | "decided" | null {
-  const evt = event as AppSyncResolverEvent<Record<string, unknown>>;
-  const field = evt.info?.fieldName;
+  const evt = event as AppSyncResolverEvent<Record<string, unknown>> & {
+    fieldName?: string;
+  };
+  // AppSync often puts fieldName at the ROOT; Amplify docs also mention info.fieldName.
+  const field = evt.fieldName ?? evt.info?.fieldName;
   if (field === "notifyRequestCreated") return "created";
   if (field === "notifyRequestDecided") return "decided";
   // Legacy fallback (older payloads / tooling without `info`).
@@ -107,7 +116,9 @@ export const handler = async (event: unknown): Promise<boolean> => {
 
     console.error(
       "send-emails :: could not classify operation — expected notifyRequestCreated " +
-        "or notifyRequestDecided. info.fieldName:",
+        "or notifyRequestDecided. fieldName:",
+      (event as { fieldName?: string }).fieldName,
+      "info.fieldName:",
       ((event as { info?: { fieldName?: string } }).info)?.fieldName,
     );
     return false;
@@ -118,6 +129,13 @@ export const handler = async (event: unknown): Promise<boolean> => {
 };
 
 async function notifyCreated(args: CreatedArgs): Promise<boolean> {
+  if (!FROM_EMAIL) {
+    console.error(
+      "send-emails :: notifyCreated — FROM_EMAIL is not configured; no messages sent",
+    );
+    return false;
+  }
+
   const dateRange = formatDateRange(args.startDate, args.endDate);
   const requesterPlain = displayLabel(args);
 
@@ -131,9 +149,11 @@ async function notifyCreated(args: CreatedArgs): Promise<boolean> {
     );
   }
 
+  let allSendsOk = true;
+
   // 1. Confirmation to the requester
   if (requesterRecipient) {
-    await sendEmail({
+    const ok = await sendEmail({
       to: requesterRecipient,
       subject: `Cottage request submitted — ${dateRange}`,
       html: `
@@ -149,6 +169,7 @@ async function notifyCreated(args: CreatedArgs): Promise<boolean> {
     `,
       text: `Your request for ${args.partyName} (${dateRange}) has been submitted. An admin will review and let you know.`,
     });
+    if (!ok) allSendsOk = false;
   }
 
   let admins: string[] = [];
@@ -162,7 +183,7 @@ async function notifyCreated(args: CreatedArgs): Promise<boolean> {
   for (const adminEmail of admins) {
     if (!looksLikeEmail(adminEmail)) continue;
     if (adminEmail === requesterRecipient) continue;
-    await sendEmail({
+    const ok = await sendEmail({
       to: adminEmail,
       subject: `New cottage request — ${args.partyName} (${dateRange})`,
       html: `
@@ -176,11 +197,19 @@ async function notifyCreated(args: CreatedArgs): Promise<boolean> {
       `,
       text: `${requesterPlain} requested the cottage for ${args.partyName} (${dateRange}). Open the approval queue to decide.`,
     });
+    if (!ok) allSendsOk = false;
   }
-  return true;
+  return allSendsOk;
 }
 
 async function notifyDecided(args: DecidedArgs): Promise<boolean> {
+  if (!FROM_EMAIL) {
+    console.error(
+      "send-emails :: notifyDecided — FROM_EMAIL is not configured; no messages sent",
+    );
+    return false;
+  }
+
   const dateRange = formatDateRange(args.startDate, args.endDate);
   const requesterPlain = displayLabel(args);
   const isApproved = args.status === "Approved";
@@ -194,7 +223,7 @@ async function notifyDecided(args: DecidedArgs): Promise<boolean> {
     return false;
   }
 
-  await sendEmail({
+  return sendEmail({
     to,
     subject: isApproved
       ? `Cottage request approved — ${dateRange}`
@@ -217,7 +246,6 @@ async function notifyDecided(args: DecidedArgs): Promise<boolean> {
       ? `Your request for ${args.partyName} (${dateRange}) has been approved.`
       : `Your request for ${args.partyName} (${dateRange}) was denied.${args.reason ? " Reason: " + args.reason : ""}`,
   });
-  return true;
 }
 
 async function getAdminEmails(): Promise<string[]> {
@@ -248,10 +276,11 @@ interface SendArgs {
   text: string;
 }
 
-async function sendEmail(args: SendArgs): Promise<void> {
+/** @returns true if SES accepted the message */
+async function sendEmail(args: SendArgs): Promise<boolean> {
   if (!FROM_EMAIL) {
     console.warn("FROM_EMAIL env var not set; skipping email to", args.to);
-    return;
+    return false;
   }
   try {
     await ses.send(new SendEmailCommand({
@@ -266,13 +295,23 @@ async function sendEmail(args: SendArgs): Promise<void> {
       },
     }));
     console.log("SES ok →", args.to, "subject:", args.subject);
-  } catch (err) {
-    console.error(
-      "SES send failed for",
-      args.to,
-      "- check SES sandbox/recipient verification, FROM identity region, and IAM:",
-      err,
-    );
+    return true;
+  } catch (err: unknown) {
+    const e = err as {
+      name?: string;
+      message?: string;
+      Code?: string;
+      $metadata?: { httpStatusCode?: number; requestId?: string };
+    };
+    console.error("SES send failed", {
+      to: args.to,
+      name: e.name,
+      code: e.Code,
+      message: e.message,
+      httpStatus: e.$metadata?.httpStatusCode,
+      requestId: e.$metadata?.requestId,
+    });
+    return false;
   }
 }
 

@@ -1,4 +1,4 @@
-import { defineBackend } from "@aws-amplify/backend";
+import { defineBackend, secret } from "@aws-amplify/backend";
 import { Aws } from "aws-cdk-lib";
 import { PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { auth } from "./auth/resource";
@@ -106,16 +106,31 @@ const cottageAppUrl = normalizePublicAppUrl(
   process.env.COTTAGE_APP_URL?.trim() || process.env.APP_URL?.trim() || ""
 );
 
-backend.sendEmails.addEnvironment("FROM_EMAIL", cottageFromEmail);
-backend.sendEmails.addEnvironment("APP_URL", cottageAppUrl);
-
-if (!cottageFromEmail) {
+if (cottageFromEmail) {
+  backend.sendEmails.addEnvironment("FROM_EMAIL", cottageFromEmail);
+} else {
+  backend.sendEmails.addEnvironment("FROM_EMAIL", secret("COTTAGE_FROM_EMAIL"));
   console.warn(
-    "[cottage-send-emails] FROM_EMAIL will be EMPTY — Lambda will skip all SES sends until you set one of:\n" +
-      "  COTTAGE_FROM_EMAIL, SES_FROM_EMAIL, or FROM_EMAIL\n" +
-      "in Amplify Hosting environment variables (same place as your build vars) then redeploy the backend.",
+    "[cottage-send-emails] process.env.COTTAGE_FROM_EMAIL was empty at deploy — resolving FROM_EMAIL from " +
+      "Amplify **Secret** `COTTAGE_FROM_EMAIL` (Amplify Console → Hosting → Secrets). " +
+      "If email still fails, add COTTAGE_FROM_EMAIL as an Environment variable OR set that secret.",
   );
 }
+
+backend.sendEmails.addEnvironment("APP_URL", cottageAppUrl);
+// SES API region (identity must exist here). Defaults to the stack region so it
+// matches verified identities in the same region as the Lambda, even when
+// Amplify's *build* runs in a different region.
+const sesRegionForEnv = process.env.COTTAGE_SES_REGION?.trim() || Aws.REGION;
+backend.sendEmails.addEnvironment("SES_REGION", sesRegionForEnv);
+
+// SES SendEmail is authorized per identity ARN region. Include both the stack
+// region and any explicit COTTAGE_SES_REGION so IAM matches the SES client when
+// they differ (otherwise sends fail with AccessDenied even though the Lambda
+// calls the right regional endpoint).
+const sesIdentityArnRegions = [
+  ...new Set([Aws.REGION, sesRegionForEnv].filter(Boolean)),
+];
 
 // IAM: list users in groups (to find admin emails) and send via SES.
 backend.sendEmails.resources.lambda.addToRolePolicy(
@@ -129,10 +144,11 @@ backend.sendEmails.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ["ses:SendEmail", "ses:SendRawEmail"],
-    // Wildcard scoping: limited to identities in this account / region.
-    resources: [
-      `arn:${Aws.PARTITION}:ses:${Aws.REGION}:${Aws.ACCOUNT_ID}:identity/*`,
-    ],
+    // Wildcard scoping: limited to identities in this account / region(s).
+    resources: sesIdentityArnRegions.map(
+      (reg) =>
+        `arn:${Aws.PARTITION}:ses:${reg}:${Aws.ACCOUNT_ID}:identity/*`,
+    ),
   })
 );
 

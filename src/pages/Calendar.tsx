@@ -2,11 +2,13 @@ import { useState } from "react";
 import { addMonths, addWeeks, toISODate } from "../lib/dates";
 import { useReservations, useRequests, type Reservation } from "../lib/data";
 import { useCurrentRole } from "../lib/auth";
+import { useIdentity } from "../lib/identity";
 import CalendarToolbar, { type ViewMode } from "../components/calendar/CalendarToolbar";
 import MonthView from "../components/calendar/MonthView";
 import WeekView from "../components/calendar/WeekView";
 import RequestModal from "../components/RequestModal";
 import ReservationModal from "../components/ReservationModal";
+import MyReservationsGlance from "../components/MyReservationsGlance";
 
 /**
  * Default landing page once signed in. Composes the calendar toolbar with
@@ -20,6 +22,7 @@ import ReservationModal from "../components/ReservationModal";
  */
 export default function Calendar() {
   const role = useCurrentRole();
+  const { userId, label, picture, loading: identityLoading } = useIdentity();
 
   const [cursor, setCursor] = useState(() => new Date());
   const [view, setView]     = useState<ViewMode>("month");
@@ -34,7 +37,7 @@ export default function Calendar() {
   const { items: reservations, loading: loadingReservations } = useReservations();
   const { items: requests,     loading: loadingRequests }     = useRequests();
 
-  const loading = loadingReservations || loadingRequests;
+  const loading = loadingReservations || loadingRequests || identityLoading;
 
   function step(direction: -1 | 1) {
     setCursor((c) => (view === "month" ? addMonths(c, direction) : addWeeks(c, direction)));
@@ -72,7 +75,18 @@ export default function Calendar() {
   }
 
   return (
-    <section className="bg-white rounded-2xl shadow-soft border border-deep/10 overflow-hidden">
+    <div className="flex flex-col md:flex-row gap-6 items-stretch md:items-start">
+      <MyReservationsGlance
+        reservations={reservations}
+        requests={requests}
+        userId={userId}
+        displayName={label}
+        picture={picture}
+        loading={loading}
+        onSelectReservation={setSelectedReservation}
+      />
+
+      <section className="bg-white rounded-2xl shadow-soft border border-deep/10 overflow-hidden flex-1 min-w-0">
       <CalendarToolbar
         cursor={cursor}
         view={view}
@@ -134,6 +148,7 @@ export default function Calendar() {
         role={role}
         onRequestChange={openModificationRequest}
       />
-    </section>
+      </section>
+    </div>
   );
 }
