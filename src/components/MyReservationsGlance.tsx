@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Reservation, Request } from "../lib/data";
-import { isUploadedPicture } from "../lib/profile";
+import { matchesCognitoIdentity } from "../lib/identity";
+import { isUploadedPicture, looksLikeStoragePath } from "../lib/profile";
 import Avatar from "./Avatar";
 
 /** Chip for stays that are live on the calendar (approved + bookable). */
@@ -10,6 +11,8 @@ interface Props {
   reservations: Reservation[];
   requests: Request[];
   userId: string | null;
+  username: string | null;
+  email: string | null;
   /** Display name (preferred username or email). */
   displayName: string | null;
   /** Cognito picture: emoji, upload path, or null. */
@@ -38,6 +41,8 @@ export default function MyReservationsGlance({
   reservations,
   requests,
   userId,
+  username,
+  email,
   displayName,
   picture,
   loading,
@@ -48,22 +53,32 @@ export default function MyReservationsGlance({
     [requests],
   );
 
-  /** Stays that are on the calendar because this user requested and was approved. */
+  /** Calendar reservations that originated from this user's request. */
   const mine = useMemo(() => {
-    if (!userId) return [];
+    if (!userId && !username && !email) return [];
+    const id = { userId, username, email };
     const list = reservations.filter((res) => {
       if (!res.sourceRequestId) return false;
       const req = requestById.get(res.sourceRequestId);
-      return req?.requesterId === userId && req.status === "Approved";
+      return req ? matchesCognitoIdentity(req.requesterId, id) : false;
     });
     list.sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
     return list;
-  }, [reservations, requestById, userId]);
+  }, [reservations, requestById, userId, username, email]);
 
   const firstName   = firstNameFromDisplay(displayName);
   const initials    = (displayName || "?").slice(0, 2).toUpperCase();
-  const inlineEmoji =
-    picture && !isUploadedPicture(picture) ? picture.trim() : null;
+  // Only show as inline emoji if it's a short string that looks like an actual emoji,
+  // not a storage path or other metadata
+  const inlineEmoji = useMemo(() => {
+    if (!picture) return null;
+    const trimmed = picture.trim();
+    if (isUploadedPicture(trimmed)) return null;
+    // Defensive: never show long ASCII strings, storage paths, or keys as "emoji"
+    if (trimmed.length > 8) return null;
+    if (trimmed.includes("/") || trimmed.includes(":")) return null;
+    return trimmed;
+  }, [picture]);
 
   return (
     <aside
@@ -109,41 +124,59 @@ export default function MyReservationsGlance({
           </p>
         ) : (
           <ul className="space-y-2">
-            {mine.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelectReservation(r)}
-                  className={rowBtnClass}
-                >
-                  <div className="flex items-start gap-2 min-w-0">
-                    <span className="text-lg shrink-0 leading-none pt-0.5" aria-hidden>
-                      {r.partyEmoji?.trim() || "🏡"}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-deep text-sm truncate">
-                          {r.partyName ?? "Stay"}
-                        </span>
-                        <span
-                          className={[
-                            "text-[10px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase shrink-0",
-                            APPROVED_CHIP,
-                          ].join(" ")}
-                        >
-                          Approved
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted mt-0.5">
-                        {r.startDate === r.endDate
-                          ? r.startDate
-                          : `${r.startDate} → ${r.endDate}`}
+            {mine.map((r) => {
+              const src = r.sourceRequestId
+                ? requestById.get(r.sourceRequestId)
+                : undefined;
+              const partyLabel =
+                looksLikeStoragePath(r.partyName) && src?.partyName
+                  ? src.partyName
+                  : (r.partyName ?? "Stay");
+              const rowPicture =
+                picture?.trim() ||
+                r.partyEmoji?.trim() ||
+                src?.requesterEmoji?.trim() ||
+                "🏡";
+
+              return (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectReservation(r)}
+                    className={rowBtnClass}
+                  >
+                    <div className="flex items-start gap-2 min-w-0">
+                      <Avatar
+                        picture={rowPicture}
+                        fallbackInitials={(partyLabel || "Stay").slice(0, 2).toUpperCase()}
+                        size={28}
+                        className="border border-deep/15 shrink-0 mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-deep text-sm truncate">
+                            {partyLabel}
+                          </span>
+                          <span
+                            className={[
+                              "text-[10px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase shrink-0",
+                              APPROVED_CHIP,
+                            ].join(" ")}
+                          >
+                            Approved
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted mt-0.5">
+                          {r.startDate === r.endDate
+                            ? r.startDate
+                            : `${r.startDate} → ${r.endDate}`}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
