@@ -46,14 +46,21 @@ export default function Avatar({
   picture, fallbackInitials, size = 36, className = "", resolvedUrl: overrideUrl,
 }: Props) {
   const [resolved, setResolved] = useState<string | null>(overrideUrl ?? null);
+  const [uploadFailed, setUploadFailed] = useState(false);
 
   useEffect(() => {
+    setUploadFailed(false);
     if (overrideUrl) { setResolved(overrideUrl); return; }
     if (picture && isUploadedPicture(picture)) {
       let cancelled = false;
       resolvePath(uploadedPicturePath(picture))
         .then((u) => { if (!cancelled) setResolved(u); })
-        .catch(() => { if (!cancelled) setResolved(null); });
+        .catch(() => {
+          if (!cancelled) {
+            setResolved(null);
+            setUploadFailed(true);
+          }
+        });
       return () => { cancelled = true; };
     }
     setResolved(null);
@@ -81,6 +88,18 @@ export default function Avatar({
         </span>
       );
     }
+    if (uploadFailed) {
+      // Bad path or permission — avoid flashing raw keys; show initials like a normal fallback.
+      return (
+        <span
+          className={`${base} bg-gradient-to-br from-sunset-amber to-sunset-coral text-white font-bold ${className}`}
+          style={style}
+          title="Profile photo could not be loaded."
+        >
+          <span style={{ fontSize: Math.round(size * 0.36) }}>{fallbackInitials}</span>
+        </span>
+      );
+    }
     // Loading state — show a soft pulse
     return (
       <span
@@ -91,15 +110,30 @@ export default function Avatar({
     );
   }
 
-  // 2. Emoji
+  // 2. Emoji — never dump long ASCII (storage keys mistaken for emoji)
   if (picture) {
+    const trimmed = picture.trim();
+    const looksLikeKey =
+      trimmed.includes("profile-pictures/") ||
+      /^upload:/i.test(trimmed) ||
+      (trimmed.length > 12 && /^[\x20-\x7E]+$/.test(trimmed) && !/\p{Extended_Pictographic}/u.test(trimmed));
+    if (looksLikeKey) {
+      return (
+        <span
+          className={`${base} bg-gradient-to-br from-sunset-amber to-sunset-coral text-white font-bold ${className}`}
+          style={style}
+        >
+          <span style={{ fontSize: Math.round(size * 0.36) }}>{fallbackInitials}</span>
+        </span>
+      );
+    }
     return (
       <span
         className={`${base} bg-foam border border-aqua/40 ${className}`}
         style={style}
         aria-hidden
       >
-        <span style={{ fontSize: Math.round(size * 0.55), lineHeight: 1 }}>{picture}</span>
+        <span style={{ fontSize: Math.round(size * 0.55), lineHeight: 1 }}>{trimmed}</span>
       </span>
     );
   }
