@@ -3,12 +3,8 @@ import type { Reservation, Request } from "../lib/data";
 import { isUploadedPicture } from "../lib/profile";
 import Avatar from "./Avatar";
 
-const STATUS_BADGE: Record<string, string> = {
-  Pending:   "bg-[#FCEACB] text-[#8a5a17]",
-  Approved:  "bg-[#D8F0EC] text-[#1F7A6F]",
-  Denied:    "bg-[#F4DAD0] text-[#87391F]",
-  Cancelled: "bg-foam text-muted",
-};
+/** Chip for stays that are live on the calendar (approved + bookable). */
+const APPROVED_CHIP = "bg-[#D8F0EC] text-[#1F7A6F]";
 
 interface Props {
   reservations: Reservation[];
@@ -29,19 +25,14 @@ function firstNameFromDisplay(label: string | null | undefined): string {
   return part || "there";
 }
 
-function rowClasses(interactive: boolean): string {
-  return [
-    "w-full text-left rounded-xl border border-deep/10 px-3 py-2.5 transition",
-    interactive
-      ? "hover:bg-foam hover:border-aqua/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-aqua/50 focus-visible:ring-offset-2"
-      : "opacity-95",
-  ].join(" ");
-}
+const rowBtnClass =
+  "w-full text-left rounded-xl border border-deep/10 px-3 py-2.5 transition " +
+  "hover:bg-foam hover:border-aqua/40 focus:outline-none focus-visible:ring-2 " +
+  "focus-visible:ring-aqua/50 focus-visible:ring-offset-2";
 
 /**
- * Left column: welcome + profile, then every stay the user has requested with
- * its approval status. Approved rows that exist on the calendar open the same
- * ReservationModal as clicking the event.
+ * Left column: welcome + profile, then calendar reservations published from
+ * this user's approved requests. Clicks open the same ReservationModal as the calendar.
  */
 export default function MyReservationsGlance({
   reservations,
@@ -52,20 +43,22 @@ export default function MyReservationsGlance({
   loading,
   onSelectReservation,
 }: Props) {
-  const reservationBySourceId = useMemo(() => {
-    const m = new Map<string, Reservation>();
-    for (const res of reservations) {
-      if (res.sourceRequestId) m.set(res.sourceRequestId, res);
-    }
-    return m;
-  }, [reservations]);
+  const requestById = useMemo(
+    () => new Map(requests.map((q) => [q.id, q])),
+    [requests],
+  );
 
+  /** Stays that are on the calendar because this user requested and was approved. */
   const mine = useMemo(() => {
     if (!userId) return [];
-    const list = requests.filter((q) => q.requesterId === userId);
+    const list = reservations.filter((res) => {
+      if (!res.sourceRequestId) return false;
+      const req = requestById.get(res.sourceRequestId);
+      return req?.requesterId === userId && req.status === "Approved";
+    });
     list.sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
     return list;
-  }, [requests, userId]);
+  }, [reservations, requestById, userId]);
 
   const firstName   = firstNameFromDisplay(displayName);
   const initials    = (displayName || "?").slice(0, 2).toUpperCase();
@@ -97,7 +90,7 @@ export default function MyReservationsGlance({
               ) : null}
             </h2>
             <p className="text-sm text-muted mt-1 leading-snug">
-              Your requests and reservation status
+              Reservation summary
             </p>
           </div>
         </div>
@@ -111,74 +104,46 @@ export default function MyReservationsGlance({
           </div>
         ) : mine.length === 0 ? (
           <p className="text-sm text-muted px-1 py-2 leading-relaxed">
-            No requests yet. Use <strong>Request dates</strong> on the calendar — each
-            submission will show here with Pending, Approved, or Denied.
+            No published reservations yet. When a request is approved, your stay appears
+            here and on the calendar.
           </p>
         ) : (
           <ul className="space-y-2">
-            {mine.map((q) => {
-              const res =
-                q.status === "Approved"
-                  ? reservationBySourceId.get(q.id) ?? null
-                  : null;
-              const interactive = Boolean(res);
-              const chip =
-                STATUS_BADGE[q.status ?? "Pending"] ?? STATUS_BADGE.Pending;
-              const face = q.requesterEmoji?.trim() || "🏡";
-
-              const body = (
-                <>
+            {mine.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelectReservation(r)}
+                  className={rowBtnClass}
+                >
                   <div className="flex items-start gap-2 min-w-0">
                     <span className="text-lg shrink-0 leading-none pt-0.5" aria-hidden>
-                      {face}
+                      {r.partyEmoji?.trim() || "🏡"}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-deep text-sm truncate">
-                          {q.partyName ?? "Stay"}
+                          {r.partyName ?? "Stay"}
                         </span>
                         <span
                           className={[
                             "text-[10px] font-bold tracking-wide rounded-full px-2 py-0.5 uppercase shrink-0",
-                            chip,
+                            APPROVED_CHIP,
                           ].join(" ")}
                         >
-                          {q.status}
+                          Approved
                         </span>
                       </div>
                       <div className="text-xs text-muted mt-0.5">
-                        {q.startDate === q.endDate
-                          ? q.startDate
-                          : `${q.startDate} → ${q.endDate}`}
+                        {r.startDate === r.endDate
+                          ? r.startDate
+                          : `${r.startDate} → ${r.endDate}`}
                       </div>
-                      {q.status === "Denied" && q.decisionReason && (
-                        <div className="text-[11px] text-denied mt-1 line-clamp-2">
-                          {q.decisionReason}
-                        </div>
-                      )}
                     </div>
                   </div>
-                </>
-              );
-
-              return (
-                <li key={q.id}>
-                  {interactive && res ? (
-                    <button
-                      type="button"
-                      onClick={() => onSelectReservation(res)}
-                      className={rowClasses(true)}
-                    >
-                      {body}
-                    </button>
-                  ) : (
-                    <div className={rowClasses(false)} role="group">
-                      {body}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </div>
