@@ -23,6 +23,22 @@ export interface Identity {
   loading: boolean;
 }
 
+/**
+ * True when a stored ID from a model (e.g. Request.requesterId) refers to the
+ * signed-in user. Compares Cognito `sub` (`userId`), username (often the email),
+ * and email — pools and legacy rows occasionally disagree on which is stored.
+ */
+export function matchesCognitoIdentity(
+  storedId: string | null | undefined,
+  identity: Pick<Identity, "userId" | "username" | "email">,
+): boolean {
+  if (!storedId) return false;
+  if (identity.userId && storedId === identity.userId) return true;
+  if (identity.username && storedId === identity.username) return true;
+  if (identity.email && storedId === identity.email) return true;
+  return false;
+}
+
 interface IdentityValue extends Identity {
   /** Re-pull attributes from Cognito. Call after Settings save. */
   refetch: () => Promise<void>;

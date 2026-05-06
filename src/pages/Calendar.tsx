@@ -22,7 +22,7 @@ import MyReservationsGlance from "../components/MyReservationsGlance";
  */
 export default function Calendar() {
   const role = useCurrentRole();
-  const { userId, label, picture, loading: identityLoading } = useIdentity();
+  const { userId, label, picture, loading: identityLoading, username, email } = useIdentity();
 
   const [cursor, setCursor] = useState(() => new Date());
   const [view, setView]     = useState<ViewMode>("month");
@@ -80,6 +80,8 @@ export default function Calendar() {
         reservations={reservations}
         requests={requests}
         userId={userId}
+        username={username}
+        email={email}
         displayName={label}
         picture={picture}
         loading={loading}

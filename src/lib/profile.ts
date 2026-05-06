@@ -96,16 +96,37 @@ export const ACCEPTED_IMAGE_TYPES = [
   "image/jpeg", "image/png", "image/webp", "image/gif",
 ];
 
-/** True if a `picture` attribute value points at an uploaded image in S3. */
+/** True if a `picture` / snapshot value points at an uploaded image in S3. */
 export function isUploadedPicture(p: string | null | undefined): boolean {
-  return !!p && p.startsWith(PICTURE_UPLOAD_PREFIX);
+  if (!p) return false;
+  const t = p.replace(/^\uFEFF/, "").trim();
+  if (!t) return false;
+  // Prefix is sometimes a different case; some rows omit the prefix but keep the key.
+  if (/^upload:/i.test(t)) return true;
+  // Rare: BOM/whitespace or wrapping before "upload:"
+  if (/\bupload:/i.test(t)) return true;
+  if (t.includes("profile-pictures/")) return true;
+  return false;
 }
 
-/** Strip the "upload:" prefix to get the raw S3 path. */
+/** Strip the "upload:" prefix (any casing) to get the storage path for getUrl(). */
 export function uploadedPicturePath(p: string): string {
-  return p.startsWith(PICTURE_UPLOAD_PREFIX)
-    ? p.slice(PICTURE_UPLOAD_PREFIX.length)
-    : p;
+  let t = p.replace(/^\uFEFF/, "").trim();
+  const lower = t.toLowerCase();
+  const u = lower.indexOf("upload:");
+  if (u >= 0) {
+    t = t.slice(u + "upload:".length).trimStart();
+  }
+  const pi = t.indexOf("profile-pictures/");
+  if (pi > 0) {
+    t = t.slice(pi);
+  }
+  return t;
+}
+
+/** Human-readable labels that accidentally contain storage keys (same heuristics as {@link isUploadedPicture}). */
+export function looksLikeStoragePath(s: string | null | undefined): boolean {
+  return isUploadedPicture(s);
 }
 
 /**
