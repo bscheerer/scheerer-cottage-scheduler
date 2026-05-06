@@ -38,6 +38,7 @@ export default function RequestModal({
   const [partyName, setPartyName] = useState(initialPartyName ?? label ?? "");
   const [note, setNote]           = useState(initialNote ?? "");
   const [sponsors, setSponsors]   = useState<string[]>([]);
+  const [agreeToRules, setAgreeToRules] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
@@ -50,6 +51,7 @@ export default function RequestModal({
       setError(null);
       setSubmitting(false);
       setSponsors([]);
+      setAgreeToRules(false);
       if (initialStart)     setStartDate(initialStart);
       if (initialEnd)       setEndDate(initialEnd);
       if (initialPartyName) setPartyName(initialPartyName);
@@ -74,7 +76,7 @@ export default function RequestModal({
   const datesValid    = startDate && endDate && startDate <= endDate;
   const partyValid    = partyName.trim().length > 0;
   const sponsorsValid = sponsors.length > 0;
-  const canSubmit     = datesValid && partyValid && sponsorsValid &&
+  const canSubmit     = datesValid && partyValid && sponsorsValid && agreeToRules &&
                         !submitting && !identityLoading && userId;
 
   function toggleSponsor(name: string) {
@@ -233,6 +235,29 @@ export default function RequestModal({
             {error}
           </div>
         )}
+
+        <div className="mt-4">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={agreeToRules}
+              onChange={(e) => setAgreeToRules(e.target.checked)}
+              className="w-4 h-4 mt-0.5 accent-mid"
+            />
+            <span className="text-sm text-ink">
+              You agree to the{" "}
+              <a
+                href="/Welcome to the Cottage.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-aqua hover:underline font-semibold"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Cottage Rules
+              </a>
+            </span>
+          </label>
+        </div>
 
         <div className="flex justify-end gap-2 mt-5">
           <button
