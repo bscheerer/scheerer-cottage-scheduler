@@ -247,7 +247,7 @@ export default function RequestModal({
             <span className="text-sm text-ink">
               You agree to the{" "}
               <a
-                href="/WelcometotheCottage.pdf"
+                href="https://scheerer-cottage-public-assets.s3.amazonaws.com/WelcometotheCottage.pdf"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-aqua hover:underline font-semibold"

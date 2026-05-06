@@ -1,2 +1,0 @@
-# SPA fallback: serve index.html for routes that don't match files
-/*    /index.html   200
