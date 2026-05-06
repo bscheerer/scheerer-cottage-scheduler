@@ -25,15 +25,3 @@ frontend:
     paths:
       - node_modules/**/*
       - .npm/**/*
-customHeaders:
-  - pattern: '**/*'
-    headers:
-      - key: 'Strict-Transport-Security'
-        value: 'max-age=31536000; includeSubDomains'
-      - key: 'X-Content-Type-Options'
-        value: 'nosniff'
-redirects:
-  - source: '</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|pdf)$)([^.]+$)/>'
-    target: '/index.html'
-    status: '200'
-    condition: null
