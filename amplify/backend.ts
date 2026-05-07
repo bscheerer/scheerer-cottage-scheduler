@@ -52,6 +52,7 @@ backend.manageUsers.resources.lambda.addToRolePolicy(
       "cognito-idp:AdminEnableUser",
       "cognito-idp:AdminDeleteUser",
       "cognito-idp:AdminResetUserPassword",
+      "cognito-idp:AdminSetUserPassword",
     ],
     resources: [userPoolArn],
   })

@@ -9,6 +9,8 @@ import {
   AdminEnableUserCommand,
   AdminDeleteUserCommand,
   AdminResetUserPasswordCommand,
+  AdminGetUserCommand,
+  AdminSetUserPasswordCommand,
   type AttributeType,
   type UserType,
 } from "@aws-sdk/client-cognito-identity-provider";
@@ -165,12 +167,29 @@ async function removeFamilyUser(args: RemoveArgs): Promise<boolean> {
 }
 
 async function resendVerificationEmail(args: ResendEmailArgs): Promise<boolean> {
-  // Reset the user's password, which sends them a new temporary password email
-  // This works for both FORCE_CHANGE_PASSWORD and UNCONFIRMED users
+  // Get the user's current status
+  const userInfo = await cognito.send(new AdminGetUserCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: args.username,
+  }));
+
+  const status = userInfo.UserStatus;
+
+  if (status === "FORCE_CHANGE_PASSWORD") {
+    // User was invited but hasn't logged in. AdminResetUserPassword doesn't work
+    // for users who haven't set a password yet. The recommended approach is to
+    // delete and recreate the user, which triggers a new invitation email.
+    throw new Error(
+      "This user hasn't completed initial setup. Please delete and re-invite them to send a new invitation email."
+    );
+  }
+
+  // For CONFIRMED, RESET_REQUIRED, and other statuses: send password reset email
   await cognito.send(new AdminResetUserPasswordCommand({
     UserPoolId: USER_POOL_ID,
     Username: args.username,
   }));
+
   return true;
 }
 
