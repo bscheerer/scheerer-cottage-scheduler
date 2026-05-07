@@ -1,4 +1,4 @@
-import { defineBackend, secret } from "@aws-amplify/backend";
+import { defineBackend } from "@aws-amplify/backend";
 import { Aws } from "aws-cdk-lib";
 import { PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { auth } from "./auth/resource";
@@ -51,8 +51,6 @@ backend.manageUsers.resources.lambda.addToRolePolicy(
       "cognito-idp:AdminDisableUser",
       "cognito-idp:AdminEnableUser",
       "cognito-idp:AdminDeleteUser",
-      "cognito-idp:AdminResetUserPassword",
-      "cognito-idp:AdminSetUserPassword",
     ],
     resources: [userPoolArn],
   })
@@ -79,6 +77,19 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
   })
 );
 
+// --- Lock the pool to invite-only sign-ups -------------------------------
+//
+// For a family-only app, random self sign-up isn't useful and routes through
+// Cognito's default verification email service which lands in spam. The
+// admin-invite path (Users & Roles page → "Invite family member") uses a
+// different Cognito flow with much better email deliverability. This flag
+// tells Cognito: only admins can create users; the app's "Create Account"
+// tab will show "Sign up disabled" and self-registration is rejected.
+const cfnUserPool = backend.auth.resources.cfnResources.cfnUserPool;
+cfnUserPool.adminCreateUserConfig = {
+  allowAdminCreateUserOnly: true,
+};
+
 // --- send-emails Lambda: env + IAM ------------------------------------------
 //
 // FROM_EMAIL must be a verified SES identity (a single email address or a
@@ -87,52 +98,14 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
 // omit the links.
 
 backend.sendEmails.addEnvironment("USER_POOL_ID", userPoolId);
-
-// Sender + app URL — set in Amplify Console → Hosting → Environment variables
-// before backend deploy (`ampx pipeline-deploy` reads Node process.env during synth).
-const cottageFromEmail =
-  process.env.COTTAGE_FROM_EMAIL?.trim() ||
-  process.env.SES_FROM_EMAIL?.trim() ||
-  process.env.FROM_EMAIL?.trim() ||
-  "";
-
-/** Amplify console entries like "morben.net" — treat as https for email links */
-function normalizePublicAppUrl(raw: string): string {
-  const u = raw.trim();
-  if (!u) return "";
-  if (/^https?:\/\//i.test(u)) return u;
-  return `https://${u}`;
-}
-
-const cottageAppUrl = normalizePublicAppUrl(
-  process.env.COTTAGE_APP_URL?.trim() || process.env.APP_URL?.trim() || ""
+backend.sendEmails.addEnvironment(
+  "FROM_EMAIL",
+  process.env.COTTAGE_FROM_EMAIL ?? ""
 );
-
-if (cottageFromEmail) {
-  backend.sendEmails.addEnvironment("FROM_EMAIL", cottageFromEmail);
-} else {
-  backend.sendEmails.addEnvironment("FROM_EMAIL", secret("COTTAGE_FROM_EMAIL"));
-  console.warn(
-    "[cottage-send-emails] process.env.COTTAGE_FROM_EMAIL was empty at deploy — resolving FROM_EMAIL from " +
-      "Amplify **Secret** `COTTAGE_FROM_EMAIL` (Amplify Console → Hosting → Secrets). " +
-      "If email still fails, add COTTAGE_FROM_EMAIL as an Environment variable OR set that secret.",
-  );
-}
-
-backend.sendEmails.addEnvironment("APP_URL", cottageAppUrl);
-// SES API region (identity must exist here). Defaults to the stack region so it
-// matches verified identities in the same region as the Lambda, even when
-// Amplify's *build* runs in a different region.
-const sesRegionForEnv = process.env.COTTAGE_SES_REGION?.trim() || Aws.REGION;
-backend.sendEmails.addEnvironment("SES_REGION", sesRegionForEnv);
-
-// SES SendEmail is authorized per identity ARN region. Include both the stack
-// region and any explicit COTTAGE_SES_REGION so IAM matches the SES client when
-// they differ (otherwise sends fail with AccessDenied even though the Lambda
-// calls the right regional endpoint).
-const sesIdentityArnRegions = [
-  ...new Set([Aws.REGION, sesRegionForEnv].filter(Boolean)),
-];
+backend.sendEmails.addEnvironment(
+  "APP_URL",
+  process.env.COTTAGE_APP_URL ?? ""
+);
 
 // IAM: list users in groups (to find admin emails) and send via SES.
 backend.sendEmails.resources.lambda.addToRolePolicy(
@@ -146,11 +119,10 @@ backend.sendEmails.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ["ses:SendEmail", "ses:SendRawEmail"],
-    // Wildcard scoping: limited to identities in this account / region(s).
-    resources: sesIdentityArnRegions.map(
-      (reg) =>
-        `arn:${Aws.PARTITION}:ses:${reg}:${Aws.ACCOUNT_ID}:identity/*`,
-    ),
+    // Wildcard scoping: limited to identities in this account / region.
+    resources: [
+      `arn:${Aws.PARTITION}:ses:${Aws.REGION}:${Aws.ACCOUNT_ID}:identity/*`,
+    ],
   })
 );
 

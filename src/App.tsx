@@ -20,30 +20,12 @@ import { IdentityProvider } from "./lib/identity";
 export default function App() {
   return (
     <Authenticator
-      signUpAttributes={["email", "preferred_username"]}
-      formFields={{
-        signUp: {
-          preferred_username: {
-            label: "Name",
-            placeholder: "First and last name (e.g. Aunt Karen)",
-            isRequired: true,
-            order: 1,
-          },
-        },
-      }}
-      services={{
-        async validateCustomSignUp(formData) {
-          const raw = (formData.preferred_username as string | undefined) ?? "";
-          const parts = raw.trim().split(/\s+/).filter(Boolean);
-          if (parts.length < 2) {
-            return {
-              preferred_username:
-                "Please enter both your first and last name (e.g. Karen Patel).",
-            };
-          }
-          return undefined;
-        },
-      }}
+      // Sign-up is disabled at the Cognito level (see amplify/backend.ts —
+      // adminCreateUserConfig.allowAdminCreateUserOnly = true). The pool
+      // rejects self-registration; admins invite family members from the
+      // Users & Roles page instead. Hiding the Sign Up tab here keeps the
+      // UI honest.
+      hideSignUp={true}
       components={{
         Header() {
           return (
