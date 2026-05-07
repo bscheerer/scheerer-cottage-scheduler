@@ -8,6 +8,7 @@ import {
   AdminDisableUserCommand,
   AdminEnableUserCommand,
   AdminDeleteUserCommand,
+  AdminResetUserPasswordCommand,
   type AttributeType,
   type UserType,
 } from "@aws-sdk/client-cognito-identity-provider";
@@ -164,11 +165,11 @@ async function removeFamilyUser(args: RemoveArgs): Promise<boolean> {
 }
 
 async function resendVerificationEmail(args: ResendEmailArgs): Promise<boolean> {
-  // For users in FORCE_CHANGE_PASSWORD state, resend the temporary password email
-  await cognito.send(new AdminCreateUserCommand({
+  // Reset the user's password, which sends them a new temporary password email
+  // This works for both FORCE_CHANGE_PASSWORD and UNCONFIRMED users
+  await cognito.send(new AdminResetUserPasswordCommand({
     UserPoolId: USER_POOL_ID,
     Username: args.username,
-    MessageAction: "RESEND",
   }));
   return true;
 }
