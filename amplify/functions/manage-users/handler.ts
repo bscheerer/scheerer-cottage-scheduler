@@ -7,6 +7,7 @@ import {
   AdminCreateUserCommand,
   AdminDisableUserCommand,
   AdminEnableUserCommand,
+  AdminDeleteUserCommand,
   type AttributeType,
   type UserType,
 } from "@aws-sdk/client-cognito-identity-provider";
@@ -30,13 +31,15 @@ export interface FamilyUser {
 interface ChangeRoleArgs  { username: string; newRole: Role }
 interface InviteArgs      { email: string; displayName: string; role: Role }
 interface RemoveArgs      { username: string }
+interface ResendEmailArgs { username: string; resend: boolean }
 
 /**
- * Single-Lambda dispatcher for four GraphQL operations:
+ * Single-Lambda dispatcher for five GraphQL operations:
  *   - listFamilyUsers (no arguments)
  *   - changeUserRole  ({ username, newRole })
  *   - inviteFamilyUser({ email, displayName, role })
  *   - removeFamilyUser({ username })
+ *   - resendVerificationEmail({ username })
  *
  * Amplify Gen 2's `a.handler.function()` invocation shape doesn't expose
  * `info.fieldName`, so we route by inspecting which arguments are present.
@@ -66,12 +69,14 @@ export const handler = async (event: unknown): Promise<unknown> => {
         case "changeUserRole":   return await changeUserRole(args as unknown as ChangeRoleArgs);
         case "inviteFamilyUser": return await inviteFamilyUser(args as unknown as InviteArgs);
         case "removeFamilyUser": return await removeFamilyUser(args as unknown as RemoveArgs);
+        case "resendVerificationEmail": return await resendVerificationEmail(args as unknown as ResendEmailArgs);
       }
     }
 
     // Argument-shape dispatch (current Amplify Gen 2 behaviour)
     if (has("newRole"))                                    return await changeUserRole(args as unknown as ChangeRoleArgs);
     if (has("email") && has("displayName") && has("role")) return await inviteFamilyUser(args as unknown as InviteArgs);
+    if (has("resend") && has("username"))                  return await resendVerificationEmail(args as unknown as ResendEmailArgs);
     if (has("username"))                                   return await removeFamilyUser(args as unknown as RemoveArgs);
     // No identifying argument → it's the list query.
     return await listFamilyUsers();
@@ -151,9 +156,19 @@ async function inviteFamilyUser(args: InviteArgs): Promise<boolean> {
 }
 
 async function removeFamilyUser(args: RemoveArgs): Promise<boolean> {
-  await cognito.send(new AdminDisableUserCommand({
+  await cognito.send(new AdminDeleteUserCommand({
     UserPoolId: USER_POOL_ID,
     Username: args.username,
+  }));
+  return true;
+}
+
+async function resendVerificationEmail(args: ResendEmailArgs): Promise<boolean> {
+  // For users in FORCE_CHANGE_PASSWORD state, resend the temporary password email
+  await cognito.send(new AdminCreateUserCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: args.username,
+    MessageAction: "RESEND",
   }));
   return true;
 }

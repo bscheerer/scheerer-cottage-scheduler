@@ -78,7 +78,25 @@ export async function removeFamilyUser(
     action: "RemoveUser",
     targetType: "User",
     targetId: username,
-    summary: `Disabled ${username}`,
+    summary: `Deleted ${username}`,
+  });
+  return Boolean(data);
+}
+
+export async function resendVerificationEmail(
+  username: string,
+  actorId: string,
+  actorLabel?: string
+) {
+  const { data, errors } = await client.mutations.resendVerificationEmail({ username, resend: true });
+  if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+  await writeAudit({
+    actorId,
+    actorLabel,
+    action: "ResendVerificationEmail",
+    targetType: "User",
+    targetId: username,
+    summary: `Resent verification email to ${username}`,
   });
   return Boolean(data);
 }

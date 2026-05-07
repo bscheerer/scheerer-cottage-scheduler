@@ -192,6 +192,16 @@ const schema = a.schema({
     .authorization((allow) => [allow.group("SuperUser")])
     .handler(a.handler.function(manageUsers)),
 
+  resendVerificationEmail: a
+    .mutation()
+    .arguments({
+      username: a.string().required(),
+      resend:   a.boolean().required(),
+    })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.group("SuperUser")])
+    .handler(a.handler.function(manageUsers)),
+
   // ---------------------------------------- Email-notification mutations
   // Fire-and-forget; failures don't roll back the action that triggered them.
 

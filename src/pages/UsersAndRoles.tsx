@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
   listFamilyUsers, changeUserRole, inviteFamilyUser, removeFamilyUser,
-  type FamilyUser, type Role,
+  resendVerificationEmail, type FamilyUser, type Role,
 } from "../lib/users";
 import { useIdentity } from "../lib/identity";
 import { useAuditFeed } from "../lib/audit";
@@ -70,17 +70,32 @@ export default function UsersAndRoles() {
   async function onRemove(u: FamilyUser) {
     if (!userId) return;
     if (u.username === userId || u.role === "SuperUser") {
-      setError("You can't disable a super user (or yourself) from this screen.");
+      setError("You can't delete a super user (or yourself) from this screen.");
       return;
     }
-    if (!confirm(`Disable ${u.displayName} (${u.email})? They won't be able to sign in.`)) return;
+    if (!confirm(`Delete ${u.displayName} (${u.email})? This will permanently remove their account.`)) return;
     setBusy(u.username);
     setError(null);
     try {
       await removeFamilyUser(u.username, userId, label ?? undefined);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not disable.");
+      setError(err instanceof Error ? err.message : "Could not delete user.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onResendEmail(u: FamilyUser) {
+    if (!userId) return;
+    if (!confirm(`Resend verification email to ${u.displayName} (${u.email})?`)) return;
+    setBusy(u.username);
+    setError(null);
+    try {
+      await resendVerificationEmail(u.username, userId, label ?? undefined);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resend email.");
     } finally {
       setBusy(null);
     }
@@ -253,13 +268,24 @@ export default function UsersAndRoles() {
                   ].join(" ")}>
                     {!u.enabled ? "Disabled" : u.status.replace(/_/g, " ")}
                   </span>
-                  <button
-                    onClick={() => onRemove(u)}
-                    disabled={busyUsername === u.username || isSelf || u.role === "SuperUser" || !u.enabled}
-                    className="text-denied hover:bg-foam border border-deep/10 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    Disable
-                  </button>
+                  <div className="flex gap-2">
+                    {(u.status === "FORCE_CHANGE_PASSWORD" || u.status === "UNCONFIRMED") && u.enabled && (
+                      <button
+                        onClick={() => onResendEmail(u)}
+                        disabled={busyUsername === u.username}
+                        className="text-mid hover:bg-foam border border-deep/10 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        Resend Email
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onRemove(u)}
+                      disabled={busyUsername === u.username || isSelf || u.role === "SuperUser" || !u.enabled}
+                      className="text-denied hover:bg-foam border border-deep/10 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </li>
               );
             })}
