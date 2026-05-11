@@ -77,17 +77,16 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
   })
 );
 
-// --- Lock the pool to invite-only sign-ups -------------------------------
+// --- Self-signup re-enabled -----------------------------------------------
 //
-// For a family-only app, random self sign-up isn't useful and routes through
-// Cognito's default verification email service which lands in spam. The
-// admin-invite path (Users & Roles page → "Invite family member") uses a
-// different Cognito flow with much better email deliverability. This flag
-// tells Cognito: only admins can create users; the app's "Create Account"
-// tab will show "Sign up disabled" and self-registration is rejected.
+// Anyone can register from the sign-in screen. Cognito sends them a
+// verification code via SES (using the verified scheduler@morben.net sender).
+// Until SES production access is approved, only recipients verified in SES
+// will actually receive the code — the rest will sign up but never get the
+// email. After production access lands, self-signup works for anyone.
 const cfnUserPool = backend.auth.resources.cfnResources.cfnUserPool;
 cfnUserPool.adminCreateUserConfig = {
-  allowAdminCreateUserOnly: true,
+  allowAdminCreateUserOnly: false,
 };
 
 // --- send-emails Lambda: env + IAM ------------------------------------------
