@@ -77,16 +77,65 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
   })
 );
 
-// --- Self-signup re-enabled -----------------------------------------------
+// --- Self-signup re-enabled + branded admin-invite email -------------------
 //
-// Anyone can register from the sign-in screen. Cognito sends them a
-// verification code via SES (using the verified scheduler@morben.net sender).
-// Until SES production access is approved, only recipients verified in SES
-// will actually receive the code — the rest will sign up but never get the
-// email. After production access lands, self-signup works for anyone.
+// Anyone can register from the sign-in screen. Admins can also still send
+// invites from the Users & Roles page; this template controls what those
+// invite emails look like. Both flows go through SES (using the verified
+// scheduler@morben.net sender) once production access is approved.
+//
+// Cognito placeholders inside `emailMessage`:
+//   {username}  — the invited user's email
+//   {####}      — their one-time temporary password
 const cfnUserPool = backend.auth.resources.cfnResources.cfnUserPool;
 cfnUserPool.adminCreateUserConfig = {
   allowAdminCreateUserOnly: false,
+  inviteMessageTemplate: {
+    emailSubject: "You're invited to the Scheerer Cottage Scheduler",
+    emailMessage: `<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:24px;background:#FAF3E3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1F2A33;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:0 auto;">
+      <tr>
+        <td style="background:linear-gradient(135deg,#0F2C40 0%,#1B4965 35%,#2C7DA0 65%,#F7B267 95%,#E76F51 100%);padding:32px 24px;border-radius:16px 16px 0 0;text-align:center;">
+          <div style="display:inline-block;width:56px;height:56px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);border-radius:14px;margin-bottom:12px;line-height:56px;">
+            <span style="font-size:30px;">⛵</span>
+          </div>
+          <h1 style="color:#ffffff;font-family:Georgia,'Iowan Old Style',serif;font-size:26px;font-weight:700;margin:0;letter-spacing:-0.01em;">Scheerer Cottage Scheduler</h1>
+          <p style="color:rgba(255,255,255,0.85);font-size:13px;margin:6px 0 0;">Lake Michigan family booking</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background:#ffffff;padding:32px 28px;border-radius:0 0 16px 16px;box-shadow:0 4px 14px rgba(28,55,75,0.10);">
+          <p style="color:#1F2A33;font-size:16px;line-height:1.5;margin:0 0 12px;">You're in 🌊</p>
+          <p style="color:#1F2A33;font-size:15px;line-height:1.6;margin:0 0 20px;">An admin has invited you to the family cottage scheduler. Here are your sign-in details:</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#E8F4F8;border:2px solid #61A5C2;border-radius:12px;margin:20px 0;">
+            <tr>
+              <td style="padding:16px 20px;border-bottom:1px solid rgba(97,165,194,0.25);">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#2C7DA0;margin-bottom:4px;">Email</div>
+                <div style="font-family:Georgia,serif;font-size:16px;color:#1B4965;word-break:break-all;">{username}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 20px;">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#2C7DA0;margin-bottom:4px;">Temporary password</div>
+                <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#1B4965;">{####}</div>
+              </td>
+            </tr>
+          </table>
+          <div style="text-align:center;margin:28px 0 18px;">
+            <a href="https://www.morben.net" style="display:inline-block;background:linear-gradient(180deg,#F7B267,#E76F51);color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;padding:12px 28px;border-radius:12px;box-shadow:0 6px 14px rgba(231,111,81,0.25);">Sign in to the cottage</a>
+          </div>
+          <p style="color:#6B7C85;font-size:13px;line-height:1.6;margin:0 0 8px;">When you sign in for the first time, you'll be prompted to set your own permanent password.</p>
+          <p style="color:#6B7C85;font-size:13px;line-height:1.6;margin:0 0 24px;">If you weren't expecting this invitation, you can ignore this email.</p>
+          <hr style="border:none;border-top:1px solid #E8F4F8;margin:24px 0 18px;">
+          <p style="color:#5C3A21;font-size:12px;text-align:center;margin:0;">Sent from <strong>Scheerer Cottage Scheduler</strong> · Lake Michigan</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+  },
 };
 
 // --- send-emails Lambda: env + IAM ------------------------------------------
