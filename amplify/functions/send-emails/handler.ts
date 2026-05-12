@@ -4,249 +4,151 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 
-const lambdaRegion = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "";
-/** Optional override when your SES identity is in another region (rare). */
-const sesRegion = process.env.SES_REGION?.trim() || lambdaRegion;
-
-const cognito = new CognitoIdentityProviderClient({
-  region: lambdaRegion || undefined,
-});
-const ses = new SESClient({ region: sesRegion || undefined });
+const cognito = new CognitoIdentityProviderClient({});
+const ses     = new SESClient({});
 
 const USER_POOL_ID = process.env.USER_POOL_ID!;
-const FROM_EMAIL = process.env.FROM_EMAIL ?? "";
-const APP_URL = process.env.APP_URL ?? "";
-
-let didLogConfig: boolean = false;
-function logRuntimeEmailConfigOnce(): void {
-  if (didLogConfig) return;
-  didLogConfig = true;
-  const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "";
-  console.log("[send-emails] runtime config", {
-    hasFromEmail: Boolean(FROM_EMAIL),
-    fromDomain: FROM_EMAIL.includes("@")
-      ? FROM_EMAIL.split("@")[1]
-      : "(invalid — need user@domain)",
-    appUrlLength: APP_URL.length,
-    lambdaRegion: region,
-    sesClientRegion: sesRegion,
-  });
-}
-
-interface AppSyncResolverEvent<T = Record<string, unknown>> {
-  arguments: T;
-  info?: {
-    fieldName?: string;
-    selectionSetList?: unknown;
-    parentTypeName?: string;
-  };
-  identity?: Record<string, unknown>;
-  source?: unknown;
-}
+const FROM_EMAIL   = process.env.FROM_EMAIL!;
+const APP_URL      = process.env.APP_URL ?? "";
 
 interface CreatedArgs {
   requesterEmail: string;
-  requesterName: string;
-  startDate: string;
-  endDate: string;
-  partyName: string;
-  note?: string;
+  requesterName:  string;
+  startDate:      string;
+  endDate:        string;
+  partyName:      string;
+  note?:          string;
 }
 
 interface DecidedArgs {
   requesterEmail: string;
-  requesterName: string;
-  startDate: string;
-  endDate: string;
-  partyName: string;
-  status: "Approved" | "Denied" | string;
-  reason?: string;
-}
-
-function looksLikeEmail(s: unknown): s is string {
-  return typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
-}
-
-/**
- * Prefer AppSync's field name so routing never collides when extra keys appear
- * on one of the argument shapes during schema evolution.
- */
-function pickOperation(event: unknown): "created" | "decided" | null {
-  const evt = event as AppSyncResolverEvent<Record<string, unknown>> & {
-    fieldName?: string;
-  };
-  // AppSync often puts fieldName at the ROOT; Amplify docs also mention info.fieldName.
-  const field = evt.fieldName ?? evt.info?.fieldName;
-  if (field === "notifyRequestCreated") return "created";
-  if (field === "notifyRequestDecided") return "decided";
-  // Legacy fallback (older payloads / tooling without `info`).
-  const args = (evt.arguments ?? (event as Record<string, unknown>) ?? {}) as Record<
-    string,
-    unknown
-  >;
-  if (
-    typeof args.status === "string" &&
-    (args.status === "Approved" || args.status === "Denied")
-  ) {
-    return "decided";
-  }
-  if ("partyName" in args && typeof args.requesterEmail === "string") {
-    return "created";
-  }
-  return null;
+  requesterName:  string;
+  startDate:      string;
+  endDate:        string;
+  partyName:      string;
+  status:         "Approved" | "Denied" | string;
+  reason?:        string;
 }
 
 /**
  * Single-Lambda dispatcher for two notification operations.
+ * Routes by checking which arguments are present (Amplify Gen 2's
+ * a.handler.function() doesn't expose info.fieldName reliably).
  */
 export const handler = async (event: unknown): Promise<boolean> => {
-  logRuntimeEmailConfigOnce();
   console.log("send-emails :: event ::", JSON.stringify(event));
   const e = event as Record<string, unknown>;
   const args = (e?.arguments ?? e ?? {}) as Record<string, unknown>;
   try {
-    const op = pickOperation(event);
-
-    if (op === "decided") {
+    if (typeof args.status === "string") {
       return await notifyDecided(args as unknown as DecidedArgs);
     }
-    if (op === "created") {
-      return await notifyCreated(args as unknown as CreatedArgs);
-    }
-
-    console.error(
-      "send-emails :: could not classify operation — expected notifyRequestCreated " +
-        "or notifyRequestDecided. fieldName:",
-      (event as { fieldName?: string }).fieldName,
-      "info.fieldName:",
-      ((event as { info?: { fieldName?: string } }).info)?.fieldName,
-    );
-    return false;
+    return await notifyCreated(args as unknown as CreatedArgs);
   } catch (err) {
     console.error("send-emails :: failed", err);
+    // Best-effort: don't fail the GraphQL call just because email failed.
     return false;
   }
 };
 
-async function notifyCreated(args: CreatedArgs): Promise<boolean> {
-  if (!FROM_EMAIL) {
-    console.error(
-      "send-emails :: notifyCreated — FROM_EMAIL is not configured; no messages sent",
-    );
-    return false;
-  }
+/* -------------------------------------------------------------------------- */
+/*  Operations                                                                 */
+/* -------------------------------------------------------------------------- */
 
+async function notifyCreated(args: CreatedArgs): Promise<boolean> {
   const dateRange = formatDateRange(args.startDate, args.endDate);
   const requesterPlain = displayLabel(args);
 
-  const requesterRecipient = looksLikeEmail(args.requesterEmail)
-    ? args.requesterEmail.trim()
-    : undefined;
-  if (!requesterRecipient) {
-    console.warn(
-      "send-emails :: notifyCreated — invalid or missing requesterEmail;",
-      JSON.stringify(args.requesterEmail),
-    );
-  }
-
-  let allSendsOk = true;
-
   // 1. Confirmation to the requester
-  if (requesterRecipient) {
-    const ok = await sendEmail({
-      to: requesterRecipient,
-      subject: `Cottage request submitted — ${dateRange}`,
-      html: `
-      <p>Hi ${escapeHtml(requesterPlain)},</p>
-      <p>Your request for the Scheerer cottage has been submitted:</p>
-      <ul>
-        <li><strong>Dates:</strong> ${escapeHtml(dateRange)}</li>
-        <li><strong>Party name:</strong> ${escapeHtml(args.partyName)}</li>
-        ${args.note ? `<li><strong>Note:</strong> ${escapeHtml(args.note)}</li>` : ""}
-      </ul>
-      <p>An admin will review and let you know.</p>
-      ${APP_URL ? `<p><a href="${escapeHtmlHref(APP_URL)}">Open the calendar</a></p>` : ""}
-    `,
-      text: `Your request for ${args.partyName} (${dateRange}) has been submitted. An admin will review and let you know.`,
-    });
-    if (!ok) allSendsOk = false;
-  }
-
-  let admins: string[] = [];
-  try {
-    admins = await getAdminEmails();
-  } catch (adminErr) {
-    console.error("send-emails :: getAdminEmails failed — admin alerts skipped:", adminErr);
-  }
+  await sendEmail({
+    to: args.requesterEmail,
+    subject: `Cottage request submitted — ${dateRange}`,
+    html: brandedEmail({
+      emoji: "🌊",
+      heading: "Request submitted",
+      intro: `Thanks ${escapeHtml(requesterPlain)} — your stay at the Scheerer cottage has been recorded and is now pending admin approval.`,
+      details: [
+        ["Dates", escapeHtml(dateRange)],
+        ["Party name", escapeHtml(args.partyName)],
+        ...(args.note ? [["Description", escapeHtml(args.note)]] as [string, string][] : []),
+      ],
+      ctaLabel: "Open the calendar",
+      ctaUrl: APP_URL,
+      footerNote: "An admin will review and let you know.",
+    }),
+    text: `Your request for ${args.partyName} (${dateRange}) has been submitted. An admin will review and let you know.`,
+  });
 
   // 2. Notify all admins + super-users
+  const admins = await getAdminEmails();
   for (const adminEmail of admins) {
-    if (!looksLikeEmail(adminEmail)) continue;
-    if (adminEmail === requesterRecipient) continue;
-    const ok = await sendEmail({
+    if (adminEmail === args.requesterEmail) continue; // don't double-mail self
+    await sendEmail({
       to: adminEmail,
       subject: `New cottage request — ${args.partyName} (${dateRange})`,
-      html: `
-        <p>${escapeHtml(requesterPlain)} has requested the cottage:</p>
-        <ul>
-          <li><strong>Dates:</strong> ${escapeHtml(dateRange)}</li>
-          <li><strong>Party:</strong> ${escapeHtml(args.partyName)}</li>
-          ${args.note ? `<li><strong>Note:</strong> ${escapeHtml(args.note)}</li>` : ""}
-        </ul>
-        ${APP_URL ? `<p><a href="${escapeHtmlHref(`${APP_URL}/queue`)}">Open the approval queue</a></p>` : ""}
-      `,
+      html: brandedEmail({
+        emoji: "📨",
+        heading: "New request awaiting approval",
+        intro: `<strong>${escapeHtml(requesterPlain)}</strong> just submitted a request for the cottage.`,
+        details: [
+          ["Dates", escapeHtml(dateRange)],
+          ["Party name", escapeHtml(args.partyName)],
+          ...(args.note ? [["Description", escapeHtml(args.note)]] as [string, string][] : []),
+        ],
+        ctaLabel: "Open the approval queue",
+        ctaUrl: APP_URL ? `${APP_URL}/queue` : "",
+        footerNote: "Approve or deny from the queue. You'll see this request alongside any others awaiting review.",
+      }),
       text: `${requesterPlain} requested the cottage for ${args.partyName} (${dateRange}). Open the approval queue to decide.`,
     });
-    if (!ok) allSendsOk = false;
   }
-  return allSendsOk;
+  return true;
 }
 
 async function notifyDecided(args: DecidedArgs): Promise<boolean> {
-  if (!FROM_EMAIL) {
-    console.error(
-      "send-emails :: notifyDecided — FROM_EMAIL is not configured; no messages sent",
-    );
-    return false;
-  }
-
   const dateRange = formatDateRange(args.startDate, args.endDate);
   const requesterPlain = displayLabel(args);
   const isApproved = args.status === "Approved";
 
-  const to = looksLikeEmail(args.requesterEmail) ? args.requesterEmail.trim() : undefined;
-  if (!to) {
-    console.warn(
-      "send-emails :: notifyDecided — invalid or missing requesterEmail;",
-      JSON.stringify(args.requesterEmail),
-    );
-    return false;
-  }
-
-  return sendEmail({
-    to,
+  await sendEmail({
+    to: args.requesterEmail,
     subject: isApproved
       ? `Cottage request approved — ${dateRange}`
       : `Cottage request denied — ${dateRange}`,
-    html: isApproved ? `
-      <p>Hi ${escapeHtml(requesterPlain)},</p>
-      <p><strong>Your request has been approved!</strong></p>
-      <ul>
-        <li><strong>Dates:</strong> ${escapeHtml(dateRange)}</li>
-        <li><strong>Party name:</strong> ${escapeHtml(args.partyName)}</li>
-      </ul>
-      ${APP_URL ? `<p><a href="${escapeHtmlHref(APP_URL)}">See the calendar</a></p>` : ""}
-    ` : `
-      <p>Hi ${escapeHtml(requesterPlain)},</p>
-      <p>Your request for ${escapeHtml(dateRange)} was unfortunately denied.</p>
-      ${args.reason ? `<p><strong>Reason:</strong> ${escapeHtml(args.reason)}</p>` : ""}
-      ${APP_URL ? `<p><a href="${escapeHtmlHref(APP_URL)}">Pick different dates</a></p>` : ""}
-    `,
+    html: isApproved
+      ? brandedEmail({
+          emoji: "🌅",
+          heading: "Your request was approved!",
+          intro: `Great news, ${escapeHtml(requesterPlain)} — the cottage is yours for the dates below. Pack the bug spray.`,
+          details: [
+            ["Dates", escapeHtml(dateRange)],
+            ["Party name", escapeHtml(args.partyName)],
+          ],
+          ctaLabel: "See the calendar",
+          ctaUrl: APP_URL,
+          footerNote: "Need to make a change? Click the reservation on the calendar and choose 'Request a change'.",
+        })
+      : brandedEmail({
+          emoji: "🛶",
+          heading: "Request denied",
+          intro: `Hi ${escapeHtml(requesterPlain)} — your request for ${escapeHtml(dateRange)} was not approved this time.`,
+          details: args.reason
+            ? [["Reason", escapeHtml(args.reason)]]
+            : [],
+          ctaLabel: "Pick different dates",
+          ctaUrl: APP_URL,
+          footerNote: "Open the calendar to find open dates and submit a new request.",
+        }),
     text: isApproved
       ? `Your request for ${args.partyName} (${dateRange}) has been approved.`
       : `Your request for ${args.partyName} (${dateRange}) was denied.${args.reason ? " Reason: " + args.reason : ""}`,
   });
+  return true;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
 
 async function getAdminEmails(): Promise<string[]> {
   const out: string[] = [];
@@ -261,7 +163,7 @@ async function getAdminEmails(): Promise<string[]> {
       }));
       for (const user of res.Users ?? []) {
         const email = user.Attributes?.find((a) => a.Name === "email")?.Value;
-        if (email && looksLikeEmail(email) && !out.includes(email)) out.push(email);
+        if (email && !out.includes(email)) out.push(email);
       }
       token = res.NextToken;
     } while (token);
@@ -276,11 +178,10 @@ interface SendArgs {
   text: string;
 }
 
-/** @returns true if SES accepted the message */
-async function sendEmail(args: SendArgs): Promise<boolean> {
+async function sendEmail(args: SendArgs): Promise<void> {
   if (!FROM_EMAIL) {
     console.warn("FROM_EMAIL env var not set; skipping email to", args.to);
-    return false;
+    return;
   }
   try {
     await ses.send(new SendEmailCommand({
@@ -294,24 +195,11 @@ async function sendEmail(args: SendArgs): Promise<boolean> {
         },
       },
     }));
-    console.log("SES ok →", args.to, "subject:", args.subject);
-    return true;
-  } catch (err: unknown) {
-    const e = err as {
-      name?: string;
-      message?: string;
-      Code?: string;
-      $metadata?: { httpStatusCode?: number; requestId?: string };
-    };
-    console.error("SES send failed", {
-      to: args.to,
-      name: e.name,
-      code: e.Code,
-      message: e.message,
-      httpStatus: e.$metadata?.httpStatusCode,
-      requestId: e.$metadata?.requestId,
-    });
-    return false;
+    console.log("Sent email to", args.to, "subject:", args.subject);
+  } catch (err) {
+    // SES sandbox rejects unverified recipients; log and swallow so the
+    // request action still succeeds.
+    console.error("SES send failed for", args.to, err);
   }
 }
 
@@ -325,7 +213,6 @@ function formatDateRange(start: string, end: string): string {
   return `${start} → ${end}`;
 }
 
-/** Escapes text for HTML body */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -335,7 +222,76 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Escapes a URL for insertion into HTML href="..." — avoid attribute injection */
-function escapeHtmlHref(url: string): string {
-  return escapeHtml(url);
+/**
+ * Brand-themed HTML email wrapper — sunset gradient header, white card body,
+ * a key-value details table, optional CTA button, and a Lake Michigan footer.
+ * Matches the Cognito verification and admin-invite emails.
+ *
+ * Inline styles only so the layout survives Gmail, Outlook, and Apple Mail.
+ */
+interface BrandedEmailOpts {
+  emoji: string;
+  heading: string;
+  intro: string;                          // may include inline HTML (already escaped)
+  details?: [string, string][];           // [label, value] rows
+  ctaLabel?: string;
+  ctaUrl?: string;
+  footerNote?: string;
+}
+
+function brandedEmail(opts: BrandedEmailOpts): string {
+  const detailsRows = (opts.details ?? [])
+    .map(
+      ([label, value]) => `
+      <tr>
+        <td style="padding:10px 20px;border-bottom:1px solid rgba(97,165,194,0.18);vertical-align:top;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#2C7DA0;margin-bottom:2px;">${escapeHtml(label)}</div>
+          <div style="font-family:Georgia,serif;font-size:15px;color:#1B4965;">${value}</div>
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  const detailsBlock = detailsRows
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#E8F4F8;border:2px solid #61A5C2;border-radius:12px;margin:20px 0;">${detailsRows}</table>`
+    : "";
+
+  const ctaButton =
+    opts.ctaLabel && opts.ctaUrl
+      ? `<div style="text-align:center;margin:24px 0 12px;">
+           <a href="${opts.ctaUrl}" style="display:inline-block;background:linear-gradient(180deg,#F7B267,#E76F51);color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;padding:12px 28px;border-radius:12px;box-shadow:0 6px 14px rgba(231,111,81,0.25);">${escapeHtml(opts.ctaLabel)}</a>
+         </div>`
+      : "";
+
+  const footerNote = opts.footerNote
+    ? `<p style="color:#6B7C85;font-size:13px;line-height:1.6;margin:18px 0 0;">${opts.footerNote}</p>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:24px;background:#FAF3E3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1F2A33;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:0 auto;">
+      <tr>
+        <td style="background:linear-gradient(135deg,#0F2C40 0%,#1B4965 35%,#2C7DA0 65%,#F7B267 95%,#E76F51 100%);padding:32px 24px;border-radius:16px 16px 0 0;text-align:center;">
+          <div style="display:inline-block;width:56px;height:56px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);border-radius:14px;margin-bottom:12px;line-height:56px;">
+            <span style="font-size:30px;">${opts.emoji}</span>
+          </div>
+          <h1 style="color:#ffffff;font-family:Georgia,'Iowan Old Style',serif;font-size:26px;font-weight:700;margin:0;letter-spacing:-0.01em;">Scheerer Cottage Scheduler</h1>
+          <p style="color:rgba(255,255,255,0.85);font-size:13px;margin:6px 0 0;">Lake Michigan family booking</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background:#ffffff;padding:32px 28px;border-radius:0 0 16px 16px;box-shadow:0 4px 14px rgba(28,55,75,0.10);">
+          <h2 style="color:#1B4965;font-family:Georgia,serif;font-size:20px;font-weight:700;margin:0 0 12px;">${escapeHtml(opts.heading)}</h2>
+          <p style="color:#1F2A33;font-size:15px;line-height:1.6;margin:0 0 8px;">${opts.intro}</p>
+          ${detailsBlock}
+          ${ctaButton}
+          ${footerNote}
+          <hr style="border:none;border-top:1px solid #E8F4F8;margin:24px 0 18px;">
+          <p style="color:#5C3A21;font-size:12px;text-align:center;margin:0;">Sent from <strong>Scheerer Cottage Scheduler</strong> · Lake Michigan</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }
