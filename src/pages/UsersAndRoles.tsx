@@ -1,7 +1,7 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
-  listFamilyUsers, changeUserRole, inviteFamilyUser, removeFamilyUser,
-  resendVerificationEmail, type FamilyUser, type Role,
+  listFamilyUsers, changeUserRole, deleteFamilyUser, resendInvite,
+  type FamilyUser, type Role,
 } from "../lib/users";
 import { useIdentity } from "../lib/identity";
 import { useAuditFeed } from "../lib/audit";
@@ -18,9 +18,10 @@ const STATUS_BADGE: Record<string, string> = {
 
 /**
  * Super User-only Users & Roles page. Reads users live from Cognito via the
- * manage-users Lambda, lets the SuperUser change roles, invite new family
- * members, and disable accounts. Audit feed at the bottom shows recent
- * actions across the whole app.
+ * manage-users Lambda, lets the SuperUser change roles, delete accounts, and
+ * resend confirmation emails to stuck users. New accounts come from the
+ * sign-in screen's "Create Account" tab (or admin-create-user via CLI).
+ * Audit feed at the bottom shows recent actions across the whole app.
  */
 export default function UsersAndRoles() {
   const { userId, label } = useIdentity();
@@ -28,14 +29,6 @@ export default function UsersAndRoles() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [busyUsername, setBusy] = useState<string | null>(null);
-  const [showInvite, setShowInvite] = useState(false);
-
-  // Invite form state
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteName, setInviteName]   = useState("");
-  const [inviteRole, setInviteRole]   = useState<Role>("Viewer");
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteBusy, setInviteBusy]   = useState(false);
 
   const { items: audit, loading: auditLoading } = useAuditFeed(20);
 
@@ -67,62 +60,39 @@ export default function UsersAndRoles() {
     }
   }
 
-  async function onRemove(u: FamilyUser) {
+  async function onDelete(u: FamilyUser) {
     if (!userId) return;
     if (u.username === userId || u.role === "SuperUser") {
       setError("You can't delete a super user (or yourself) from this screen.");
       return;
     }
-    if (!confirm(`Delete ${u.displayName} (${u.email})? This will permanently remove their account.`)) return;
+    if (!confirm(
+      `Permanently delete ${u.displayName} (${u.email})?\n\n` +
+      `This removes their account from Cognito. Their existing reservations and ` +
+      `audit-log entries stay, but they'll need to register again to come back.`
+    )) return;
     setBusy(u.username);
     setError(null);
     try {
-      await removeFamilyUser(u.username, userId, label ?? undefined);
+      await deleteFamilyUser(u.username, userId, label ?? undefined);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete user.");
+      setError(err instanceof Error ? err.message : "Could not delete.");
     } finally {
       setBusy(null);
     }
   }
 
-  async function onResendEmail(u: FamilyUser) {
+  async function onResend(u: FamilyUser) {
     if (!userId) return;
-    if (!confirm(`Resend verification email to ${u.displayName} (${u.email})?`)) return;
     setBusy(u.username);
     setError(null);
     try {
-      await resendVerificationEmail(u.username, userId, label ?? undefined);
-      await refresh();
+      await resendInvite(u.username, userId, label ?? undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not resend email.");
+      setError(err instanceof Error ? err.message : "Could not resend invite.");
     } finally {
       setBusy(null);
-    }
-  }
-
-  async function onInviteSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!userId) return;
-    setInviteBusy(true);
-    setInviteError(null);
-    try {
-      await inviteFamilyUser(
-        inviteEmail.trim().toLowerCase(),
-        inviteName.trim(),
-        inviteRole,
-        userId,
-        label ?? undefined
-      );
-      setInviteEmail("");
-      setInviteName("");
-      setInviteRole("Viewer");
-      setShowInvite(false);
-      await refresh();
-    } catch (err) {
-      setInviteError(err instanceof Error ? err.message : "Invite failed.");
-    } finally {
-      setInviteBusy(false);
     }
   }
 
@@ -142,13 +112,6 @@ export default function UsersAndRoles() {
           >
             Refresh
           </button>
-          <button
-            onClick={() => setShowInvite((s) => !s)}
-            className="text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-soft transition hover:brightness-105"
-            style={{ background: "linear-gradient(180deg, #2C7DA0, #1B4965)" }}
-          >
-            {showInvite ? "Close invite" : "+ Invite family member"}
-          </button>
         </div>
       </header>
 
@@ -156,72 +119,6 @@ export default function UsersAndRoles() {
         <div className="rounded-xl border border-denied/40 bg-[#F4DAD0] px-3 py-2 text-sm text-[#7A2F18]">
           {error}
         </div>
-      )}
-
-      {showInvite && (
-        <form
-          onSubmit={onInviteSubmit}
-          className="bg-white rounded-2xl border border-deep/10 shadow-soft p-5 space-y-3"
-        >
-          <h3 className="font-display text-lg text-deep">Invite a family member</h3>
-          <p className="text-sm text-muted">
-            Cognito will email them a one-time password to the address you enter.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Field label="Email">
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="cousin@example.com"
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Display name">
-              <input
-                type="text"
-                required
-                value={inviteName}
-                onChange={(e) => setInviteName(e.target.value)}
-                placeholder="Aunt Karen"
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Role">
-              <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as Role)}
-                className={inputCls}
-              >
-                <option value="Viewer">Viewer</option>
-                <option value="Admin">Admin</option>
-              </select>
-            </Field>
-          </div>
-          {inviteError && (
-            <div className="rounded-xl border border-denied/40 bg-[#F4DAD0] px-3 py-2 text-sm text-[#7A2F18]">
-              {inviteError}
-            </div>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowInvite(false)}
-              className="text-mid hover:bg-foam rounded-lg px-3 py-2 text-sm font-semibold transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={inviteBusy || !inviteEmail || !inviteName}
-              className="text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-soft transition disabled:opacity-50"
-              style={{ background: "linear-gradient(180deg, #F7B267, #E76F51)" }}
-            >
-              {inviteBusy ? "Sending invite…" : "Send invite"}
-            </button>
-          </div>
-        </form>
       )}
 
       <div className="bg-white rounded-2xl border border-deep/10 shadow-soft overflow-hidden">
@@ -268,24 +165,25 @@ export default function UsersAndRoles() {
                   ].join(" ")}>
                     {!u.enabled ? "Disabled" : u.status.replace(/_/g, " ")}
                   </span>
-                  <div className="flex gap-2">
-                    {(u.status === "FORCE_CHANGE_PASSWORD" || u.status === "UNCONFIRMED") && u.enabled && (
-                      <button
-                        onClick={() => onResendEmail(u)}
-                        disabled={busyUsername === u.username}
-                        className="text-mid hover:bg-foam border border-deep/10 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        Resend Email
-                      </button>
-                    )}
+                  {/* Resend invite — only meaningful for users that haven't
+                      finished setting up their account. */}
+                  {(u.status === "FORCE_CHANGE_PASSWORD" || u.status === "UNCONFIRMED" || u.status === "RESET_REQUIRED") && (
                     <button
-                      onClick={() => onRemove(u)}
-                      disabled={busyUsername === u.username || isSelf || u.role === "SuperUser" || !u.enabled}
-                      className="text-denied hover:bg-foam border border-deep/10 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      onClick={() => onResend(u)}
+                      disabled={busyUsername === u.username}
+                      title="Resend invitation / verification email"
+                      className="text-mid hover:bg-foam border border-deep/10 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                      Delete
+                      {busyUsername === u.username ? "…" : "Resend invite"}
                     </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => onDelete(u)}
+                    disabled={busyUsername === u.username || isSelf || u.role === "SuperUser"}
+                    className="text-denied hover:bg-foam border border-deep/10 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Delete
+                  </button>
                 </li>
               );
             })}
