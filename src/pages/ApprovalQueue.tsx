@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRequests, approveRequest, denyRequest, type Request } from "../lib/data";
 import { useIdentity } from "../lib/identity";
 import Avatar from "../components/Avatar";
+import { initialsFromName } from "../lib/profile";
 
 const STATUS_BADGE: Record<string, string> = {
   Pending:   "bg-[#FCEACB] text-[#8a5a17]",
@@ -115,7 +116,7 @@ export default function ApprovalQueue() {
                 <div className="flex-1 min-w-[260px] flex items-start gap-3">
                   <Avatar
                     picture={r.requesterEmoji}
-                    fallbackInitials={(r.partyName || r.requesterName || "?").slice(0, 2).toUpperCase()}
+                    fallbackInitials={initialsFromName(r.partyName || r.requesterName)}
                     size={36}
                   />
                   <div className="min-w-0">
@@ -161,7 +162,7 @@ export default function ApprovalQueue() {
                 <div className="flex-1 min-w-[220px] flex items-start gap-3">
                   <Avatar
                     picture={r.requesterEmoji}
-                    fallbackInitials={(r.partyName || r.requesterName || "?").slice(0, 2).toUpperCase()}
+                    fallbackInitials={initialsFromName(r.partyName || r.requesterName)}
                     size={28}
                   />
                   <div className="min-w-0">

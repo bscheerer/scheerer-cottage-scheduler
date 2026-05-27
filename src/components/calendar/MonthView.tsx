@@ -1,6 +1,7 @@
 import { format, isSameMonth, isToday, monthGridDays, toISODate } from "../../lib/dates";
 import type { Reservation, Request } from "../../lib/data";
 import Avatar from "../Avatar";
+import { initialsFromName } from "../../lib/profile";
 
 interface Props {
   cursor: Date;
@@ -151,7 +152,7 @@ function ReservationLabel({
   const text = tone === "approved" ? "text-white" : "text-driftwood";
   // Hover/long-press tooltip surfaces the description without needing a click.
   const tooltip = note ? `${name}\n${note}` : name;
-  const initials = (name || "?").slice(0, 2).toUpperCase();
+  const initials = initialsFromName(name);
   return (
     <div
       className={`flex flex-col items-center gap-0.5 leading-tight ${text}`}

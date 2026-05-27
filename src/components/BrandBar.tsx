@@ -5,6 +5,7 @@ import { Role, roleLabel } from "../lib/auth";
 import { useIdentity } from "../lib/identity";
 import { useRequests } from "../lib/data";
 import Avatar from "./Avatar";
+import { initialsFromName } from "../lib/profile";
 
 interface Props {
   role: Role;
@@ -20,7 +21,7 @@ export default function BrandBar({ role }: Props) {
   const { items: requests } = useRequests();
   const isAdmin = role === "Admin" || role === "SuperUser";
   const isSuper = role === "SuperUser";
-  const initials = (label || email || "?").slice(0, 2).toUpperCase();
+  const initials = initialsFromName(label || email);
   const pendingCount = isAdmin
     ? requests.filter((r) => r.status === "Pending").length
     : 0;

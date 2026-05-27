@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useReservations, useRequests, cancelRequest, type Request } from "../lib/data";
-import { useIdentity } from "../lib/identity";
+import { matchesCognitoIdentity, useIdentity } from "../lib/identity";
 import RequestModal from "../components/RequestModal";
 import Avatar from "../components/Avatar";
+import { initialsFromName } from "../lib/profile";
 
 const STATUS_BADGE: Record<string, string> = {
   Pending:   "bg-[#FCEACB] text-[#8a5a17]",
@@ -16,7 +17,7 @@ const STATUS_BADGE: Record<string, string> = {
  * cancelled. Newest first.
  */
 export default function MyRequests() {
-  const { userId, label, loading: identityLoading } = useIdentity();
+  const { userId, label, loading: identityLoading, username, email } = useIdentity();
   const { items: requests, loading: requestsLoading } = useRequests();
   const { items: reservations } = useReservations();
   const [modalOpen, setModalOpen] = useState(false);
@@ -25,7 +26,7 @@ export default function MyRequests() {
 
   const loading = identityLoading || requestsLoading;
   const mine = requests
-    .filter((r) => r.requesterId === userId)
+    .filter((r) => matchesCognitoIdentity(r.requesterId, { userId, username, email }))
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
   async function onCancel(req: Request) {
@@ -84,7 +85,7 @@ export default function MyRequests() {
                 <div className="flex-1 min-w-[220px] flex items-start gap-3">
                   <Avatar
                     picture={r.requesterEmoji}
-                    fallbackInitials={(r.partyName || r.requesterName || "?").slice(0, 2).toUpperCase()}
+                    fallbackInitials={initialsFromName(r.partyName || r.requesterName)}
                     size={36}
                   />
                   <div className="min-w-0">

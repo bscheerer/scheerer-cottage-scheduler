@@ -175,3 +175,33 @@ export async function uploadProfilePicture(
   return `${PICTURE_UPLOAD_PREFIX}${finalPath}`;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Initials                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pick two display initials from a person's name.
+ *   "Camille Sturman" -> "CS"
+ *   "Camille"         -> "CA"
+ *   ""                -> initials from `fallback` (typically email)
+ *   missing both      -> "?"
+ */
+export function initialsFromName(
+  name: string | null | undefined,
+  fallback?: string | null | undefined,
+): string {
+  const trimmed = (name ?? "").trim();
+  if (trimmed) {
+    const parts = trimmed.split(/\s+/);
+    if (parts.length >= 2) {
+      const first = parts[0][0] ?? "";
+      const last  = parts[parts.length - 1][0] ?? "";
+      const combo = (first + last).toUpperCase();
+      if (combo) return combo;
+    }
+    return trimmed.slice(0, 2).toUpperCase();
+  }
+  const fb = (fallback ?? "").trim();
+  if (fb) return fb.slice(0, 2).toUpperCase();
+  return "?";
+}

@@ -6,6 +6,7 @@ import {
 import { useIdentity } from "../lib/identity";
 import { useAuditFeed } from "../lib/audit";
 import { format, parseISO } from "../lib/dates";
+import { initialsFromName } from "../lib/profile";
 
 const ROLES: Role[] = ["SuperUser", "Admin", "Viewer"];
 
@@ -139,7 +140,7 @@ export default function UsersAndRoles() {
               return (
                 <li key={u.username} className="px-5 py-3 flex flex-wrap items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-mid to-deep text-white flex items-center justify-center font-bold text-sm">
-                    {(u.displayName || u.email).slice(0, 2).toUpperCase()}
+                    {initialsFromName(u.displayName || u.email)}
                   </div>
                   <div className="flex-1 min-w-[200px]">
                     <div className="font-semibold text-deep">

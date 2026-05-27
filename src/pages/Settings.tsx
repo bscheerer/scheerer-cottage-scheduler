@@ -2,8 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "rea
 import { useIdentity } from "../lib/identity";
 import {
   AVATAR_EMOJIS, formatPhoneForDisplay, isUploadedPicture, normalizePhone,
-  PICTURE_UPLOAD_PREFIX, updateProfile, uploadProfilePicture,
-} from "../lib/profile";
+  PICTURE_UPLOAD_PREFIX, updateProfile, uploadProfilePicture, initialsFromName } from "../lib/profile";
 import Avatar from "../components/Avatar";
 
 /**
@@ -131,7 +130,7 @@ export default function Settings() {
 
   const initials = (
     (trimmedFirst[0] || "") + (trimmedLast[0] || "")
-  ).toUpperCase() || (preferredUsername || email || "?").slice(0, 2).toUpperCase();
+  ).toUpperCase() || initialsFromName(preferredUsername || email);
   const previewPicture =
     pendingPreviewUrl ? null /* show pendingPreviewUrl directly below */ : chosenPicture;
 

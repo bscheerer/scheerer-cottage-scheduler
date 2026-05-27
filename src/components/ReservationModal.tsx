@@ -2,10 +2,11 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
   deleteReservation, updateReservation, type Reservation, type Request,
 } from "../lib/data";
-import { useIdentity } from "../lib/identity";
+import { matchesCognitoIdentity, useIdentity } from "../lib/identity";
 import { type Role } from "../lib/auth";
 import { format, parseISO, toISODate } from "../lib/dates";
 import Avatar from "./Avatar";
+import { initialsFromName } from "../lib/profile";
 
 interface Props {
   reservation: Reservation | null;
@@ -34,14 +35,16 @@ interface Props {
 export default function ReservationModal({
   reservation, open, onClose, requests, role, onRequestChange,
 }: Props) {
-  const { userId, label } = useIdentity();
+  const { userId, label, username, email } = useIdentity();
   const isAdmin = role === "Admin" || role === "SuperUser";
 
   // Find the original requester's user id via the source request.
   const sourceRequest = reservation?.sourceRequestId
     ? requests.find((r) => r.id === reservation.sourceRequestId)
     : undefined;
-  const isOwner = !!userId && !!sourceRequest && sourceRequest.requesterId === userId;
+  const isOwner =
+    !!sourceRequest &&
+    matchesCognitoIdentity(sourceRequest.requesterId, { userId, username, email });
 
   const [editing, setEditing]   = useState(false);
   const [startDate, setStartDate] = useState("");
@@ -109,7 +112,7 @@ export default function ReservationModal({
   }
 
   const headerPicture = reservation.partyEmoji || sourceRequest?.requesterEmoji || "";
-  const headerInitials = (reservation.partyName ?? "?").slice(0, 2).toUpperCase();
+  const headerInitials = initialsFromName(reservation.partyName);
   const dateRange = formatDateRange(reservation.startDate ?? "", reservation.endDate ?? "");
   const today = toISODate(new Date());
 
@@ -173,11 +176,7 @@ export default function ReservationModal({
                 <div className="flex items-center gap-2.5">
                   <Avatar
                     picture={sourceRequest.requesterEmoji}
-                    fallbackInitials={(
-                      sourceRequest.requesterName ||
-                      sourceRequest.partyName ||
-                      "?"
-                    ).slice(0, 2).toUpperCase()}
+                    fallbackInitials={initialsFromName(sourceRequest.requesterName || sourceRequest.partyName)}
                     size={32}
                   />
                   <span className="text-ink font-medium">

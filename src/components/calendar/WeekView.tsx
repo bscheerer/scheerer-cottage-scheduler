@@ -1,6 +1,7 @@
 import { format, isToday, toISODate, weekDays } from "../../lib/dates";
 import type { Reservation, Request } from "../../lib/data";
 import Avatar from "../Avatar";
+import { initialsFromName } from "../../lib/profile";
 
 interface Props {
   cursor: Date;
@@ -121,7 +122,7 @@ function CellLabel({
   name, emoji, tone,
 }: { name: string; emoji: string; tone: "approved" | "pending" }) {
   const text = tone === "approved" ? "text-white" : "text-driftwood";
-  const initials = (name || "?").slice(0, 2).toUpperCase();
+  const initials = initialsFromName(name);
   return (
     <div className={`flex flex-col items-center gap-1 ${text}`}>
       {emoji && (
