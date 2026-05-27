@@ -158,14 +158,12 @@ function ReservationLabel({
       className={`flex flex-col items-center gap-0.5 leading-tight ${text}`}
       title={tooltip}
     >
-      {emoji && (
-        <Avatar
+      <Avatar
           picture={emoji}
           fallbackInitials={initials}
           size={28}
           className="border border-white/30"
         />
-      )}
       <span className="text-[11px] font-bold truncate max-w-[100px]">{name}</span>
       {tone === "pending" && (
         <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">Pending</span>

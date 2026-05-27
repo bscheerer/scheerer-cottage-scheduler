@@ -125,14 +125,12 @@ function CellLabel({
   const initials = initialsFromName(name);
   return (
     <div className={`flex flex-col items-center gap-1 ${text}`}>
-      {emoji && (
-        <Avatar
+      <Avatar
           picture={emoji}
           fallbackInitials={initials}
           size={48}
           className="border border-white/30"
         />
-      )}
       <span className="text-sm font-bold text-center px-1" title={name}>
         {name}
       </span>
