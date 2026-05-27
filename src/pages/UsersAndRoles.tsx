@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   listFamilyUsers, changeUserRole, deleteFamilyUser, resendInvite,
   type FamilyUser, type Role,
@@ -225,15 +225,3 @@ export default function UsersAndRoles() {
   );
 }
 
-const inputCls =
-  "w-full border border-deep/15 rounded-lg px-3 py-2 bg-offwhite text-ink " +
-  "focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm";
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-mid mb-1">{label}</div>
-      {children}
-    </label>
-  );
-}

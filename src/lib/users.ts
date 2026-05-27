@@ -100,3 +100,39 @@ export async function resendVerificationEmail(
   });
   return Boolean(data);
 }
+
+export async function deleteFamilyUser(
+  username: string,
+  actorId: string,
+  actorLabel?: string
+) {
+  const { data, errors } = await client.mutations.deleteFamilyUser({ username });
+  if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+  await writeAudit({
+    actorId,
+    actorLabel,
+    action: "DeleteUser",
+    targetType: "User",
+    targetId: username,
+    summary: `Deleted ${username}`,
+  });
+  return Boolean(data);
+}
+
+export async function resendInvite(
+  username: string,
+  actorId: string,
+  actorLabel?: string
+) {
+  const { data, errors } = await client.mutations.resendInvite({ username });
+  if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
+  await writeAudit({
+    actorId,
+    actorLabel,
+    action: "ResendInvite",
+    targetType: "User",
+    targetId: username,
+    summary: `Resent invitation email to ${username}`,
+  });
+  return Boolean(data);
+}
