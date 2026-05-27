@@ -174,6 +174,21 @@ const schema = a.schema({
     .authorization((allow) => [allow.group("SuperUser")])
     .handler(a.handler.function(manageUsers)),
 
+  deleteFamilyUser: a
+    .mutation()
+    .arguments({ username: a.string().required() })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.group("SuperUser")])
+    .handler(a.handler.function(manageUsers)),
+
+  resendInvite: a
+    .mutation()
+    .arguments({ username: a.string().required() })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.group("SuperUser")])
+    .handler(a.handler.function(manageUsers)),
+
+
   inviteFamilyUser: a
     .mutation()
     .arguments({
