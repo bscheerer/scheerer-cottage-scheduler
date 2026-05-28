@@ -95,6 +95,7 @@ export default function Calendar() {
         onPrev ={() => step(-1)}
         onNext ={() => step(1)}
         onToday={() => setCursor(new Date())}
+          onPickDate={setCursor}
         onView ={setView}
         onRequest={openFreshRequestModal}
       />

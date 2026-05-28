@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { format } from "../../lib/dates";
+import DateJump from "./DateJump";
 
 export type ViewMode = "month" | "week";
 
@@ -11,6 +12,7 @@ interface Props {
   onToday: () => void;
   onView: (v: ViewMode) => void;
   onRequest: () => void;
+  onPickDate: (d: Date) => void;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * for requesting dates.
  */
 export default function CalendarToolbar({
-  cursor, view, onPrev, onNext, onToday, onView, onRequest,
+  cursor, view, onPrev, onNext, onToday, onView, onRequest, onPickDate,
 }: Props) {
   const title =
     view === "month"
@@ -38,6 +40,7 @@ export default function CalendarToolbar({
         >
           Today
         </button>
+        <DateJump cursor={cursor} onPickDate={onPickDate} />
       </div>
 
       <div className="flex items-center gap-3">
