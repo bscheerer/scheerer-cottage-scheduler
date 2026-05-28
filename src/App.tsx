@@ -116,7 +116,7 @@ function SignedInApp() {
         </Routes>
       </main>
       <footer className="text-center text-xs text-muted py-6">
-        Scheerer Cottage Scheduler · v0.5
+        Scheerer Cottage Scheduler  ©️2026 - All rights reserved
       </footer>
     </div>
   );
