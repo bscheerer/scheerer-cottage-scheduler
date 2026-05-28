@@ -7,6 +7,7 @@ import Calendar from "./pages/Calendar";
 import MyRequests from "./pages/MyRequests";
 import ApprovalQueue from "./pages/ApprovalQueue";
 import UsersAndRoles from "./pages/UsersAndRoles";
+import AdminDashboard from "./pages/AdminDashboard";
 import Settings from "./pages/Settings";
 import { useCurrentRole } from "./lib/auth";
 import { IdentityProvider } from "./lib/identity";
@@ -99,6 +100,14 @@ function SignedInApp() {
             element={
               <ProtectedRoute role={role} allow={["SuperUser"]}>
                 <UsersAndRoles />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute role={role} allow={["SuperUser"]}>
+                <AdminDashboard />
               </ProtectedRoute>
             }
           />

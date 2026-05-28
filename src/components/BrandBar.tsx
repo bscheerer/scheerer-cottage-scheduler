@@ -69,6 +69,7 @@ export default function BrandBar({ role }: Props) {
             </NavItem>
           )}
           {isSuper && <NavItem to="/users">Users</NavItem>}
+          {isSuper && <NavItem to="/admin">Admin</NavItem>}
         </nav>
 
         <div className="flex items-center gap-3">
