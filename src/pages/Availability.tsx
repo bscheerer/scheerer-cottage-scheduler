@@ -27,8 +27,9 @@ export default function Availability() {
         });
         if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
         if (cancelled) return;
-        const open = (data ?? [])
-          .filter((s): s is BookableSlot => Boolean(s) && s.status === "Open")
+        const all = (data ?? []) as BookableSlot[];
+        const open = all
+          .filter((s) => s && s.status === "Open")
           .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
         setSlots(open);
       } catch (err) {
