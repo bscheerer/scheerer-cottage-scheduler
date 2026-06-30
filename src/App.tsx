@@ -8,6 +8,7 @@ import MyRequests from "./pages/MyRequests";
 import ApprovalQueue from "./pages/ApprovalQueue";
 import UsersAndRoles from "./pages/UsersAndRoles";
 import AdminDashboard from "./pages/AdminDashboard";
+import PaidSlots from "./pages/PaidSlots";
 import Settings from "./pages/Settings";
 import Availability from "./pages/Availability";
 import { useCurrentRole } from "./lib/auth";
@@ -120,6 +121,14 @@ function SignedInApp() {
             element={
               <ProtectedRoute role={role} allow={["SuperUser"]}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/slots"
+            element={
+              <ProtectedRoute role={role} allow={["SuperUser"]}>
+                <PaidSlots />
               </ProtectedRoute>
             }
           />
