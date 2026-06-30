@@ -9,6 +9,7 @@ import ApprovalQueue from "./pages/ApprovalQueue";
 import UsersAndRoles from "./pages/UsersAndRoles";
 import AdminDashboard from "./pages/AdminDashboard";
 import Settings from "./pages/Settings";
+import Availability from "./pages/Availability";
 import { useCurrentRole } from "./lib/auth";
 import { IdentityProvider } from "./lib/identity";
 
@@ -19,6 +20,17 @@ import { IdentityProvider } from "./lib/identity";
  * RequestModal, etc.) so a Settings save instantly updates the brand bar.
  */
 export default function App() {
+  return (
+    <Routes>
+      {/* Public availability landing — no sign-in required */}
+      <Route path="/availability" element={<Availability />} />
+      {/* Everything else lives behind the Authenticator */}
+      <Route path="/*" element={<AuthedApp />} />
+    </Routes>
+  );
+}
+
+function AuthedApp() {
   return (
     <Authenticator
       signUpAttributes={["email", "preferred_username"]}

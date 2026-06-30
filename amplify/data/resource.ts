@@ -144,6 +144,27 @@ const schema = a.schema({
       // Append-only — no updates or deletes, ever.
     ]),
 
+  // ----------------------------------------------------- BookableSlot
+  // SuperUser-created paid slots that patrons can purchase via Stripe.
+  // Public read via apiKey auth mode powers the unauthenticated /availability
+  // landing page; userPool auth lets signed-in users read full details too.
+  BookableSlot: a
+    .model({
+      startDate:   a.date().required(),
+      endDate:     a.date(),
+      title:       a.string().required(),
+      description: a.string(),
+      priceCents:  a.integer().required(),
+      status:      a.enum(["Open", "Reserved", "Sold", "Cancelled"]),
+      createdById: a.id().required(),
+    })
+    .secondaryIndexes((index) => [index("startDate"), index("status")])
+    .authorization((allow) => [
+      allow.publicApiKey().to(["read"]),
+      allow.authenticated().to(["read"]),
+      allow.group("SuperUser").to(["create", "update", "delete"]),
+    ]),
+
   // -------------------------------------------------------- FamilyUser
   // Lightweight DTO returned by listFamilyUsers (the data lives in Cognito,
   // not in our DB).
@@ -256,5 +277,6 @@ export const data = defineData({
   schema,
   authorizationModes: {
     defaultAuthorizationMode: "userPool",
+    apiKeyAuthorizationMode: { expiresInDays: 365 },
   },
 });

@@ -61,7 +61,7 @@ export const auth = defineAuth({
     // intentionally not declared here — declaring it would trigger a Cognito
     // schema-update that's also disallowed for existing pools.
   },
-  groups: ["SuperUser", "Admin", "Viewer"],
+  groups: ["SuperUser", "Admin", "Viewer", "Patron"],
   triggers: {
     postConfirmation,
   },

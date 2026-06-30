@@ -220,7 +220,7 @@ const listProfilesPolicy = new PolicyStatement({
   },
 });
 
-const groupNames = ["SuperUser", "Admin", "Viewer"] as const;
+const groupNames = ["SuperUser", "Admin", "Viewer", "Patron"] as const;
 for (const name of groupNames) {
   // The `groups` map type isn't strictly typed by Amplify Gen 2; cast loosely.
   const role = (backend.auth.resources.groups as Record<string, { role?: { addToPrincipalPolicy: (p: PolicyStatement) => void } }>)[name]?.role;

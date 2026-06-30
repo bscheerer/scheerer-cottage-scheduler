@@ -18,12 +18,12 @@ export const handler: PostConfirmationTriggerHandler = async (event) => {
     await cognito.send(new AdminAddUserToGroupCommand({
       UserPoolId: event.userPoolId,
       Username:   event.userName,
-      GroupName:  "Viewer",
+      GroupName:  "Patron",
     }));
-    console.log("Added", event.userName, "to Viewer");
+    console.log("Added", event.userName, "to Patron");
   } catch (err) {
     // Don't fail sign-up — log and let the Super User promote manually.
-    console.error("Could not auto-add user to Viewer group:", err);
+    console.error("Could not auto-add user to Patron group:", err);
   }
   return event;
 };
