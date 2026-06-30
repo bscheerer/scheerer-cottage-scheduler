@@ -6,6 +6,7 @@ import { postConfirmation } from "./auth/post-confirmation/resource";
 import { data } from "./data/resource";
 import { manageUsers } from "./functions/manage-users/resource";
 import { sendEmails } from "./functions/send-emails/resource";
+import { stripeCheckout } from "./functions/stripe-checkout/resource";
 import { storage } from "./storage/resource";
 
 /**
@@ -29,6 +30,7 @@ export const backend = defineBackend({
   postConfirmation,
   sendEmails,
   storage,
+  stripeCheckout,
 });
 
 const userPoolArn = backend.auth.resources.userPool.userPoolArn;
@@ -229,3 +231,34 @@ for (const name of groupNames) {
   role.addToPrincipalPolicy(everyoneReadPolicy);
   role.addToPrincipalPolicy(listProfilesPolicy);
 }
+
+
+// --- stripe-checkout Lambda: env + IAM --------------------------------------
+//
+// STRIPE_SECRET_KEY must be set in the Amplify console env vars (key:
+// COTTAGE_STRIPE_SECRET_KEY) BEFORE this deploys, otherwise the Lambda
+// will throw at first invocation. APP_URL is the public site root used to
+// build Stripe success/cancel URLs. BOOKABLE_SLOT_TABLE is the DynamoDB
+// table name so the Lambda can fetch the slot directly.
+
+backend.stripeCheckout.addEnvironment(
+  "STRIPE_SECRET_KEY",
+  process.env.COTTAGE_STRIPE_SECRET_KEY ?? "",
+);
+backend.stripeCheckout.addEnvironment(
+  "APP_URL",
+  process.env.COTTAGE_APP_URL ?? "",
+);
+backend.stripeCheckout.addEnvironment(
+  "BOOKABLE_SLOT_TABLE",
+  backend.data.resources.tables.BookableSlot.tableName,
+);
+
+backend.stripeCheckout.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ["dynamodb:GetItem"],
+    resources: [backend.data.resources.tables.BookableSlot.tableArn],
+  })
+);
+

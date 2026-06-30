@@ -1,6 +1,7 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 import { manageUsers } from "../functions/manage-users/resource";
 import { sendEmails } from "../functions/send-emails/resource";
+import { stripeCheckout } from "../functions/stripe-checkout/resource";
 
 /**
  * GraphQL data model for the Scheerer Cottage Scheduler.
@@ -269,6 +270,20 @@ const schema = a.schema({
     .returns(a.boolean())
     .authorization((allow) => [allow.groups(["Admin", "SuperUser"])])
     .handler(a.handler.function(sendEmails)),
+  // -------------------------------- createCheckoutSession (Stripe)
+  // Authenticated patrons hit this from /book/start. The Lambda looks up
+  // the slot, creates a Stripe Checkout Session, and returns the URL. The
+  // frontend redirects there. Slot stays Open until the webhook (Phase C.2)
+  // flips it to Sold.
+  createCheckoutSession: a
+    .mutation()
+    .arguments({ slotId: a.string().required() })
+    .returns(a.customType({
+      checkoutUrl: a.string().required(),
+    }))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(stripeCheckout)),
+
 });
 
 export type Schema = ClientSchema<typeof schema>;

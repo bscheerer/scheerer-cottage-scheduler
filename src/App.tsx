@@ -11,6 +11,9 @@ import AdminDashboard from "./pages/AdminDashboard";
 import PaidSlots from "./pages/PaidSlots";
 import Settings from "./pages/Settings";
 import Availability from "./pages/Availability";
+import BookStart from "./pages/BookStart";
+import BookSuccess from "./pages/BookSuccess";
+import BookCancelled from "./pages/BookCancelled";
 import { useCurrentRole } from "./lib/auth";
 import { IdentityProvider } from "./lib/identity";
 
@@ -25,6 +28,8 @@ export default function App() {
     <Routes>
       {/* Public availability landing — no sign-in required */}
       <Route path="/availability" element={<Availability />} />
+      <Route path="/book/success" element={<BookSuccess />} />
+      <Route path="/book/cancelled" element={<BookCancelled />} />
       {/* Everything else lives behind the Authenticator */}
       <Route path="/*" element={<AuthedApp />} />
     </Routes>
@@ -94,6 +99,7 @@ function SignedInApp() {
       <main className="max-w-6xl w-full mx-auto px-6 py-8 flex-1">
         <Routes>
           <Route path="/" element={<Navigate to="/calendar" replace />} />
+          <Route path="/book/start" element={<BookStart />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/my-requests" element={<MyRequests />} />
           <Route path="/settings" element={<Settings />} />
