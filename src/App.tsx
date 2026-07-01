@@ -81,7 +81,7 @@ function AuthedApp() {
               </div>
               <h1 className="font-display text-2xl text-deep">Scheerer Cottage Scheduler</h1>
               <p className="text-sm text-muted mb-4">Lake Michigan family booking</p>
-              
+              <a
                 href="/calendar-preview"
                 className="inline-block text-sm font-semibold text-mid hover:text-deep transition border border-deep/20 rounded-lg px-4 py-2 hover:bg-foam"
               >
