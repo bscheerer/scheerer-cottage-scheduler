@@ -51,7 +51,13 @@ export const handler = async (event: unknown): Promise<Result> => {
     throw new Error(`This slot is no longer available (status: ${Item.status})`);
   }
 
-  const appUrl = process.env.APP_URL || "https://www.morben.net";
+  let appUrl = process.env.APP_URL || "https://www.morben.net";
+  // Stripe requires an explicit scheme; prepend https:// if the env var is a bare host.
+  if (appUrl && !/^https?:\/\//i.test(appUrl)) {
+    appUrl = "https://" + appUrl;
+  }
+  // Strip any trailing slash so we don't double-slash.
+  appUrl = appUrl.replace(/\/$/, "");
   const buyerEmail = identity.claims?.email;
 
   const session = await stripe.checkout.sessions.create({
