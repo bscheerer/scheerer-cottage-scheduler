@@ -67,6 +67,7 @@ const schema = a.schema({
     })
     .secondaryIndexes((index) => [index("startDate")])
     .authorization((allow) => [
+      allow.publicApiKey().to(["read"]),
       allow.authenticated().to(["read"]),
       allow.groups(["Admin", "SuperUser"]).to(["create", "update", "delete"]),
     ]),

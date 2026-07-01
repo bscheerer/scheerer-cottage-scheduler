@@ -12,6 +12,7 @@ import PatronCalendar from "./pages/PatronCalendar";
 import PaidSlots from "./pages/PaidSlots";
 import Settings from "./pages/Settings";
 import Availability from "./pages/Availability";
+import PublicCalendar from "./pages/PublicCalendar";
 import BookStart from "./pages/BookStart";
 import BookSuccess from "./pages/BookSuccess";
 import BookCancelled from "./pages/BookCancelled";
@@ -29,6 +30,7 @@ export default function App() {
     <Routes>
       {/* Public availability landing — no sign-in required */}
       <Route path="/availability" element={<Availability />} />
+      <Route path="/calendar-preview" element={<PublicCalendar />} />
       <Route path="/book/success" element={<BookSuccess />} />
       <Route path="/book/cancelled" element={<BookCancelled />} />
       {/* Everything else lives behind the Authenticator */}
@@ -78,7 +80,13 @@ function AuthedApp() {
                 </div>
               </div>
               <h1 className="font-display text-2xl text-deep">Scheerer Cottage Scheduler</h1>
-              <p className="text-sm text-muted">Lake Michigan family booking</p>
+              <p className="text-sm text-muted mb-4">Lake Michigan family booking</p>
+              
+                href="/calendar-preview"
+                className="inline-block text-sm font-semibold text-mid hover:text-deep transition border border-deep/20 rounded-lg px-4 py-2 hover:bg-foam"
+              >
+                Just browsing? View the calendar →
+              </a>
             </div>
           );
         },
