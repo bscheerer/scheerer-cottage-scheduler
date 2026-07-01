@@ -1,7 +1,7 @@
 import { client } from "./client";
 import { writeAudit } from "./audit";
 
-export type Role = "SuperUser" | "Admin" | "Viewer";
+export type Role = "SuperUser" | "Admin" | "Viewer" | "Patron";
 
 export interface FamilyUser {
   username: string;
