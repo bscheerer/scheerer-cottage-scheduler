@@ -105,7 +105,7 @@ function SignedInApp() {
       <BrandBar role={role} />
       <main className="max-w-6xl w-full mx-auto px-6 py-8 flex-1">
         <Routes>
-          <Route path="/" element={<Navigate to={role === "Patron" ? "/patron-calendar" : "/calendar"} replace />} />
+          <Route path="/" element={<Navigate to={role === "SuperUser" || role === "Admin" || role === "Viewer" ? "/calendar" : "/patron-calendar"} replace />} />
           <Route path="/book/start" element={<BookStart />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/patron-calendar" element={<PatronCalendar />} />
@@ -147,7 +147,7 @@ function SignedInApp() {
             }
           />
 
-          <Route path="*" element={<Navigate to={role === "Patron" ? "/patron-calendar" : "/calendar"} replace />} />
+          <Route path="*" element={<Navigate to={role === "SuperUser" || role === "Admin" || role === "Viewer" ? "/calendar" : "/patron-calendar"} replace />} />
         </Routes>
       </main>
       <footer className="text-center text-xs text-muted py-6">

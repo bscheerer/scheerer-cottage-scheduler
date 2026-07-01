@@ -8,7 +8,7 @@ import { useAuditFeed } from "../lib/audit";
 import { format, parseISO } from "../lib/dates";
 import { initialsFromName } from "../lib/profile";
 
-const ROLES: Role[] = ["SuperUser", "Admin", "Viewer"];
+const ROLES: Role[] = ["SuperUser", "Admin", "Viewer", "Patron"];
 
 const STATUS_BADGE: Record<string, string> = {
   CONFIRMED:           "bg-[#D8F0EC] text-[#1F7A6F]",
