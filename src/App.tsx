@@ -81,11 +81,9 @@ function AuthedApp() {
               </div>
               <h1 className="font-display text-2xl text-deep">Scheerer Cottage Scheduler</h1>
               <p className="text-sm text-muted mb-4">Lake Michigan family booking</p>
-              <a
-                href="/calendar-preview"
-                className="inline-block text-sm font-semibold text-mid hover:text-deep transition border border-deep/20 rounded-lg px-4 py-2 hover:bg-foam"
-              >
-                Just browsing? View the calendar
+              <a href="/calendar-preview" className="inline-block text-white text-center px-7 py-4 rounded-2xl shadow-soft hover:brightness-105 transition leading-tight" style={{ background: "linear-gradient(135deg, #F7B267, #E76F51)" }}>
+                <span className="block font-semibold text-base">View the calendar</span>
+                <span className="block text-[11px] opacity-90 mt-0.5">No account required &middot; browse open dates</span>
               </a>
             </div>
           );
