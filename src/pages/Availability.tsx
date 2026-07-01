@@ -51,7 +51,7 @@ export default function Availability() {
           </h1>
           <p className="text-muted text-sm leading-relaxed">
             Single-day Lake Michigan retreats hosted by the Scheerer family.
-            Pick a date \u2014 create a free account to reserve and pay.
+            Pick a date — create a free account to reserve and pay.
           </p>
         </div>
 
@@ -80,7 +80,7 @@ export default function Availability() {
         </p>
       </main>
       <footer className="text-center text-xs text-muted py-6">
-        Scheerer Cottage Scheduler  \u00a9\ufe0f2026 - All rights reserved
+        Scheerer Cottage Scheduler  ©️2026 - All rights reserved
       </footer>
     </div>
   );
@@ -105,7 +105,7 @@ function PublicHeader() {
           </div>
           <div>
             <h1 className="font-display text-xl leading-tight">Scheerer Cottage Scheduler</h1>
-            <p className="text-xs text-white/80">Lake Michigan \u00b7 book a day</p>
+            <p className="text-xs text-white/80">Lake Michigan · book a day</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -137,7 +137,7 @@ function SlotCard({ slot }: { slot: BookableSlot }) {
     <div className="bg-white rounded-2xl border border-deep/10 shadow-soft p-4 flex items-center gap-4 flex-wrap sm:flex-nowrap">
       <div className="bg-foam rounded-xl px-3 py-2 text-center min-w-[64px] flex-shrink-0">
         <div className="text-[10px] font-bold uppercase tracking-wider text-mid">
-          {date ? format(date, "MMM") : "\u2014"}
+          {date ? format(date, "MMM") : "—"}
         </div>
         <div className="font-display text-2xl text-deep leading-none">
           {date ? format(date, "d") : "?"}
@@ -159,7 +159,7 @@ function SlotCard({ slot }: { slot: BookableSlot }) {
           className="inline-block mt-1 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-soft"
           style={{ background: "#E76F51" }}
         >
-          Book now \u2192
+          Book now →
         </Link>
       </div>
     </div>
@@ -170,7 +170,7 @@ function Loading() {
   return (
     <div className="text-center py-10 text-muted">
       <div className="inline-block w-6 h-6 border-2 border-aqua border-t-transparent rounded-full animate-spin mb-2" />
-      <div>Loading available dates\u2026</div>
+      <div>Loading available dates…</div>
     </div>
   );
 }

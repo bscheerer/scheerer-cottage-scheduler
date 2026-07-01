@@ -72,7 +72,7 @@ export default function PaidSlots() {
 
   async function onDelete(slot: BookableSlot) {
     if (slot.status === "Sold") {
-      setError("Sold slots can't be deleted \u2014 keep them for the audit trail.");
+      setError("Sold slots can't be deleted — keep them for the audit trail.");
       return;
     }
     if (!confirm(`Permanently delete "${slot.title}"? This can't be undone.`)) return;
@@ -156,7 +156,7 @@ export default function PaidSlots() {
           if (!Number.isFinite(d0) || !Number.isFinite(d1) || d1 < d0) return null;
           const days = Math.round((d1 - d0) / 86400000) + 1;
           const avgLabel = priceDollars && days > 0
-            ? " \u00b7 $" + Math.round(parseFloat(priceDollars) / days) + "/day avg"
+            ? " · $" + Math.round(parseFloat(priceDollars) / days) + "/day avg"
             : "";
           return (
             <p className="text-xs text-muted -mt-1">
@@ -189,7 +189,7 @@ export default function PaidSlots() {
             className="text-white font-semibold text-sm px-4 py-2 rounded-xl shadow-soft transition hover:brightness-105 disabled:opacity-60"
             style={{ background: "linear-gradient(180deg, #F7B267, #E76F51)" }}
           >
-            {submitting ? "Publishing\u2026" : "+ Publish slot"}
+            {submitting ? "Publishing…" : "+ Publish slot"}
           </button>
         </div>
       </form>
@@ -201,7 +201,7 @@ export default function PaidSlots() {
         {loading ? (
           <div className="text-center py-10 text-muted">
             <div className="inline-block w-6 h-6 border-2 border-aqua border-t-transparent rounded-full animate-spin mb-2" />
-            <div className="text-sm">Loading\u2026</div>
+            <div className="text-sm">Loading…</div>
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-10 text-muted text-sm">
@@ -250,7 +250,7 @@ function SlotRow({
     <li className="px-5 py-3 flex items-center gap-4 flex-wrap">
       <div className="bg-foam rounded-lg px-3 py-1.5 text-center min-w-[56px]">
         <div className="text-[10px] font-bold uppercase tracking-wider text-mid">
-          {date ? format(date, "MMM") : "\u2014"}
+          {date ? format(date, "MMM") : "—"}
         </div>
         <div className="font-display text-xl text-deep leading-none">
           {date ? format(date, "d") : "?"}

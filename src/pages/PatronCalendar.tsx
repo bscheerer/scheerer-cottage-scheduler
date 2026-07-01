@@ -63,7 +63,7 @@ export default function PatronCalendar() {
     <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-5">
       <aside className="bg-white rounded-2xl shadow-soft border border-deep/10 p-4 self-start">
         <div className="bg-foam border-l-4 border-aqua rounded-r-lg p-3 mb-3">
-          <p className="text-sm font-semibold text-deep">Welcome, {firstName} \u{1F30A}</p>
+          <p className="text-sm font-semibold text-deep">Welcome, {firstName} 🌊</p>
           <p className="text-xs text-muted mt-0.5">Signed in as Patron</p>
         </div>
         <p className="font-display text-sm text-deep mb-2">My bookings</p>
@@ -81,12 +81,12 @@ export default function PatronCalendar() {
               onClick={() => setCursor((c) => addMonths(c, -1))}
               aria-label="Previous month"
               className="w-9 h-9 inline-flex items-center justify-center bg-white border border-deep/15 rounded-lg text-mid hover:bg-foam transition text-lg leading-none"
-            >\u2039</button>
+            >‹</button>
             <button
               onClick={() => setCursor((c) => addMonths(c, 1))}
               aria-label="Next month"
               className="w-9 h-9 inline-flex items-center justify-center bg-white border border-deep/15 rounded-lg text-mid hover:bg-foam transition text-lg leading-none"
-            >\u203A</button>
+            >›</button>
             <h2 className="font-display text-xl text-deep mx-1">{format(cursor, "MMMM yyyy")}</h2>
             <button
               onClick={() => setCursor(new Date())}
@@ -103,7 +103,7 @@ export default function PatronCalendar() {
         {loading ? (
           <div className="text-center py-16 text-muted">
             <div className="inline-block w-6 h-6 border-2 border-aqua border-t-transparent rounded-full animate-spin mb-2" />
-            <div className="text-sm">Loading calendar\u2026</div>
+            <div className="text-sm">Loading calendar…</div>
           </div>
         ) : (
           <div className="px-5 pt-4 pb-5">

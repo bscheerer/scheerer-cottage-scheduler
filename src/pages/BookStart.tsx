@@ -41,7 +41,7 @@ export default function BookStart() {
       {busy && !error ? (
         <>
           <div className="inline-block w-8 h-8 border-2 border-aqua border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="font-display text-xl text-deep mb-2">Setting up your booking\u2026</p>
+          <p className="font-display text-xl text-deep mb-2">Setting up your booking…</p>
           <p className="text-sm text-muted">You'll be redirected to Stripe in a moment.</p>
         </>
       ) : (
