@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  addMonths, format, isSameMonth, isToday, monthGridDays, toISODate,
+  addMonths, format, isSameMonth, isToday, monthGridDays, parseISO, toISODate,
 } from "../lib/dates";
 import { client } from "../lib/client";
 import type { Schema } from "../../amplify/data/resource";
@@ -51,6 +51,12 @@ export default function PublicCalendar() {
   }, []);
 
   const days = monthGridDays(cursor);
+
+  const openSlots = useMemo(() => {
+    return slots
+      .filter((s) => s?.status === "Open")
+      .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
+  }, [slots]);
 
   const dayStatuses: DayStatus[] = useMemo(() => {
     return days.map((day): DayStatus => {
@@ -171,6 +177,18 @@ export default function PublicCalendar() {
             )}
           </section>
         </div>
+        <div className="bg-white rounded-2xl shadow-soft border border-deep/10 overflow-hidden mt-5 p-5">
+          <h3 className="font-display text-lg text-deep mb-3">Open dates</h3>
+          {openSlots.length === 0 ? (
+            <p className="text-sm text-muted italic">No open dates right now. Check back soon.</p>
+          ) : (
+            <div className="grid gap-2">
+              {openSlots.map((slot) => (
+                <SlotSummaryCard key={slot.id} slot={slot} />
+              ))}
+            </div>
+          )}
+        </div>
       </main>
       <footer className="text-center text-xs text-muted py-6">
         Scheerer Cottage Scheduler  ©️2026 - All rights reserved
@@ -276,6 +294,38 @@ function DayCell({ status, isTodayCell, onBook }: {
       ].join(" ")}
     >
       <span className="text-[13px] font-bold">{format(status.day, "d")}</span>
+    </div>
+  );
+}
+
+
+function SlotSummaryCard({ slot }: { slot: BookableSlot }) {
+  const start = slot.startDate ? parseISO(slot.startDate) : null;
+  const end   = slot.endDate   ? parseISO(slot.endDate)   : start;
+  const isMultiDay = slot.startDate && slot.endDate && slot.startDate !== slot.endDate;
+  const dayCount = start && end
+    ? Math.round((end.getTime() - start.getTime()) / 86400000) + 1
+    : 1;
+  const price = ((slot.priceCents ?? 0) / 100).toLocaleString("en-US", {
+    style: "currency", currency: "USD", maximumFractionDigits: 0,
+  });
+  return (
+    <div className="bg-foam/40 rounded-xl border border-deep/10 p-3 flex items-center gap-3 flex-wrap sm:flex-nowrap">
+      <div className="bg-white rounded-lg px-3 py-1.5 text-center min-w-[84px] flex-shrink-0">
+        <div className="text-[10px] font-bold uppercase tracking-wider text-mid">{start ? format(start, "MMM") : "--"}</div>
+        <div className="font-display text-lg text-deep leading-tight">{start ? format(start, "d") : "?"}{isMultiDay && end ? " - " + format(end, start && start.getMonth() === end.getMonth() ? "d" : "MMM d") : ""}</div>
+        <div className="text-[10px] text-muted">{start ? format(start, "yyyy") + (isMultiDay ? " · " + dayCount + " days" : "") : ""}</div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-deep text-sm">{slot.title}</h4>
+        {slot.description && (
+          <p className="text-xs text-muted leading-snug mt-0.5">{slot.description}</p>
+        )}
+      </div>
+      <div className="text-right ml-auto">
+        <div className="font-display text-lg text-deep">{price}</div>
+        <Link to={`/book/start?slotId=${slot.id}`} className="inline-block mt-1 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-soft" style={{ background: "#E76F51" }}>Book now</Link>
+      </div>
     </div>
   );
 }
