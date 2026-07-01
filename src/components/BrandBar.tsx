@@ -51,8 +51,8 @@ export default function BrandBar({ role }: Props) {
         </div>
 
         <nav className="hidden md:flex items-center gap-1 text-sm">
-          <NavItem to="/calendar">Calendar</NavItem>
-          <NavItem to="/my-requests">My requests</NavItem>
+          <NavItem to={role === "Patron" ? "/patron-calendar" : "/calendar"}>Calendar</NavItem>
+          {role !== "Patron" && <NavItem to="/my-requests">My requests</NavItem>}
           {isAdmin && (
             <NavItem to="/queue">
               <span className="relative inline-flex items-center pr-1">

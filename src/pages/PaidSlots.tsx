@@ -19,6 +19,7 @@ export default function PaidSlots() {
 
   // Form state
   const [startDate,     setStartDate]    = useState("");
+  const [endDate,       setEndDate]      = useState("");
   const [title,         setTitle]        = useState("");
   const [description,   setDescription]  = useState("");
   const [priceDollars,  setPriceDollars] = useState("");
@@ -46,12 +47,14 @@ export default function PaidSlots() {
     setError(null);
     try {
       await createBookableSlot({
-        startDate, title,
+        startDate,
+        endDate: endDate || startDate,
+        title,
         description: description || undefined,
         priceCents: cents,
         createdById: userId,
       });
-      setStartDate(""); setTitle(""); setDescription(""); setPriceDollars("");
+      setStartDate(""); setEndDate(""); setTitle(""); setDescription(""); setPriceDollars("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create slot.");
     } finally {
@@ -111,17 +114,30 @@ export default function PaidSlots() {
         className="bg-white rounded-2xl border border-deep/10 shadow-soft p-5 space-y-3"
       >
         <h3 className="font-display text-deep">Create a new slot</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Date">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label="Start date">
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                if (!endDate || endDate < e.target.value) setEndDate(e.target.value);
+              }}
               className={inputCls}
               required
             />
           </Field>
-          <Field label="Price (USD)">
+          <Field label="End date">
+            <input
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              className={inputCls}
+              required
+            />
+          </Field>
+          <Field label="Price (USD, total)">
             <input
               type="number"
               min="1"
@@ -134,6 +150,20 @@ export default function PaidSlots() {
             />
           </Field>
         </div>
+        {startDate && endDate && (() => {
+          const d0 = Date.parse(startDate);
+          const d1 = Date.parse(endDate);
+          if (!Number.isFinite(d0) || !Number.isFinite(d1) || d1 < d0) return null;
+          const days = Math.round((d1 - d0) / 86400000) + 1;
+          const avgLabel = priceDollars && days > 0
+            ? " \u00b7 $" + Math.round(parseFloat(priceDollars) / days) + "/day avg"
+            : "";
+          return (
+            <p className="text-xs text-muted -mt-1">
+              {days === 1 ? "Single day" : days + " days"}{avgLabel}
+            </p>
+          );
+        })()}
         <Field label="Title">
           <input
             type="text"

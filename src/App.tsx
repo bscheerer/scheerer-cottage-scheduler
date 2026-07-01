@@ -8,6 +8,7 @@ import MyRequests from "./pages/MyRequests";
 import ApprovalQueue from "./pages/ApprovalQueue";
 import UsersAndRoles from "./pages/UsersAndRoles";
 import AdminDashboard from "./pages/AdminDashboard";
+import PatronCalendar from "./pages/PatronCalendar";
 import PaidSlots from "./pages/PaidSlots";
 import Settings from "./pages/Settings";
 import Availability from "./pages/Availability";
@@ -98,9 +99,10 @@ function SignedInApp() {
       <BrandBar role={role} />
       <main className="max-w-6xl w-full mx-auto px-6 py-8 flex-1">
         <Routes>
-          <Route path="/" element={<Navigate to="/calendar" replace />} />
+          <Route path="/" element={<Navigate to={role === "Patron" ? "/patron-calendar" : "/calendar"} replace />} />
           <Route path="/book/start" element={<BookStart />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/patron-calendar" element={<PatronCalendar />} />
           <Route path="/my-requests" element={<MyRequests />} />
           <Route path="/settings" element={<Settings />} />
 
@@ -139,7 +141,7 @@ function SignedInApp() {
             }
           />
 
-          <Route path="*" element={<Navigate to="/calendar" replace />} />
+          <Route path="*" element={<Navigate to={role === "Patron" ? "/patron-calendar" : "/calendar"} replace />} />
         </Routes>
       </main>
       <footer className="text-center text-xs text-muted py-6">
