@@ -85,7 +85,7 @@ function AuthedApp() {
                 href="/calendar-preview"
                 className="inline-block text-sm font-semibold text-mid hover:text-deep transition border border-deep/20 rounded-lg px-4 py-2 hover:bg-foam"
               >
-                Just browsing? View the calendar →
+                Just browsing? View the calendar
               </a>
             </div>
           );
